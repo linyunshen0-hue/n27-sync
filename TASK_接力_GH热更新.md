@@ -12,16 +12,16 @@
 |---|---|
 | 题量 | 1353 → **1617**（新增 27肖八选择题 8 套 264 题） |
 | 套数 | 41 → **49** |
-| `d.json.gz` | 811 KB → **883 KB** |
-| 离线包 | 1.08 MB → **1.2 MB** |
-| 肖八解析 | 84/264 已有（第一套、第二套全，第三套 18 题）；其余 180 题正在 OCR，`_xiaoba/watcher.py` 跑完会自动重建并重打包 |
-| 肖八考点 | 155 题挂确定考点，109 题挂 `571 暂无考点`，等苍盾官方更新后替换（`_xiaoba/kd_status.json` 存了全部候选） |
+| `d.json.gz` | 811 KB → **936 KB** |
+| 离线包 | 1.08 MB → **1.27 MB** |
+| 肖八解析 | **264/264 全部就绪**（答案 264/264，解析 262/264 完整；906003/903024/907024 三题 OCR 截断待补） |
+| 肖八考点 | **209 题挂确定考点，55 题挂 `571 暂无考点`**（等苍盾官方更新后替换，`_xiaoba/kd_status.json` 存了全部候选） |
 
 **要推的就是新的 `d.json.gz` + `version.json`（已 git commit）**，流程见第 3 节，不用重新生成数据。
 
 ## 0.1 一句话任务
 
-把已经生成好的 `_sync/`（`version.json` + `d.json.gz`，共 883 KB）推到一个 GitHub 仓库，
+把已经生成好的 `_sync/`（`version.json` + `d.json.gz`，共 936 KB）推到一个 GitHub 仓库，
 让 `冲刺刷题3.html` 启动时能通过 jsDelivr 检查并拉取新版题库。
 
 **唯一卡点：需要一个人类在浏览器上点一次 Authorize（AI 拿不到账号身份，这一步无法代劳）。**
@@ -33,7 +33,7 @@
 | 步骤 | 状态 | 说明 |
 |---|---|---|
 | 题库 / 页面 / 离线包 | ✅ 已完成 | **1617 题 / 49 套**（含 27肖八 264 题），v3 工作台，离线包 1.2 MB 可双击 |
-| `_sync/` 两个数据文件 | ✅ 已生成 | `version.json` 163 B，`d.json.gz` 883 KB（1617 题） |
+| `_sync/` 两个数据文件 | ✅ 已生成 | `version.json` 163 B，`d.json.gz` 936 KB（1617 题，肖八 264 题全解析） |
 | `_sync/` git 仓库 | ✅ 已 init | 唯一提交 `0e98420 sync: v2026-11-14`，分支已改名 `main`（原始是 master，必须 main，页面里 `SYNC.branch='main'`） |
 | SSH key 文件 | ✅ 存在 | `~/.ssh/id_ed25519_github` + `.pub`，`~/.ssh/config` 已配 `ssh.github.com:443` |
 | SSH key 加到 GitHub 账号 | ❌ **没加** | 实测 `ssh -T git@github.com` → `Permission denied (publickey)` |
@@ -251,7 +251,7 @@ async function decryptBuf(buf){
 仓库       github.com/<user>/n27-sync  (public/private)
 push       ✅ <commit sha>
 CDN        ✅ version.json 200, total=1617
-d.json.gz  ✅ 883 KB → 解压后 2.85 MB, questions=1617
+d.json.gz  ✅ 936 KB → 解压后 3.01 MB, questions=1617
 SYNC.repo  ✅ 冲刺刷题3.html:268
 离线包     ✅ 冲刺模考_离线版.html 1.08 MB 重新生成
 token      已 logout / 保留（删了 _sync/.ghtoken）
