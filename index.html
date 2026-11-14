@@ -391,7 +391,10 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 #foldBtn{display:none;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#5b6270}
 @media (min-width:701px){#foldBtn{display:flex}}
 .side{transition:flex-basis .22s cubic-bezier(.4,0,.2,1),width .22s cubic-bezier(.4,0,.2,1),padding .22s}
-.side.fold{flex:0 0 0!important;width:0!important;min-width:0!important;padding-left:0;padding-right:0;overflow:hidden;border-right:0}
+/* 折叠只适用于桌面；手机上 .fold 会把抽屉宽度压成 0 → 只剩遮罩（黑屏） */
+@media (min-width:701px){
+  .side.fold{flex:0 0 0!important;width:0!important;min-width:0!important;padding-left:0;padding-right:0;overflow:hidden;border-right:0}
+}
 /* ===== 居中确认框（替代原生 confirm） ===== */
 .mck{position:fixed;inset:0;background:rgba(16,24,40,.5);z-index:10060;display:none;align-items:center;justify-content:center;padding:20px}
 .mck.on{display:flex}
@@ -402,10 +405,49 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 .mck-f{display:flex;gap:9px}
 .mck-f .btn{flex:1;justify-content:center;height:40px}
 /* ===== 切题滑动过渡 ===== */
-@keyframes slidL{from{transform:translateX(54px);opacity:.35}to{transform:none;opacity:1}}
-@keyframes slidR{from{transform:translateX(-54px);opacity:.35}to{transform:none;opacity:1}}
-#qwrap.slidL>.qcard{animation:slidL .26s cubic-bezier(.22,.7,.3,1)}
-#qwrap.slidR>.qcard{animation:slidR .26s cubic-bezier(.22,.7,.3,1)}
+@keyframes slidL{from{transform:translate3d(42%,0,0);opacity:.15}60%{opacity:.9}to{transform:none;opacity:1}}
+@keyframes slidR{from{transform:translate3d(-42%,0,0);opacity:.15}60%{opacity:.9}to{transform:none;opacity:1}}
+#qwrap{position:relative}
+#qwrap.slidL>.qcard{animation:slidL .34s cubic-bezier(.22,.68,.24,1)}
+#qwrap.slidR>.qcard{animation:slidR .34s cubic-bezier(.22,.68,.24,1)}
+#qwrap.slidL>.qcard,#qwrap.slidR>.qcard{will-change:transform,opacity}
+/* 旧题副本向左/右滑出，与新题滑入重叠 → 连续翻页感 */
+@keyframes ghostL{from{transform:none;opacity:1}to{transform:translate3d(-42%,0,0);opacity:0}}
+@keyframes ghostR{from{transform:none;opacity:1}to{transform:translate3d(42%,0,0);opacity:0}}
+.qcard-ghost{position:absolute;left:0;right:0;top:0;pointer-events:none;margin:0 auto;
+  animation:ghostL .34s cubic-bezier(.4,0,.6,1) forwards;z-index:0}
+#qwrap>.qcard.qcard-ghost{animation-name:ghostL}
+#qwrap>.qcard.qcard-ghost.ghostR{animation-name:ghostR}
+#qwrap.slidL>.qcard,#qwrap.slidR>.qcard{position:relative;z-index:1}
+
+/* ===== 刷题模式：顶部只留必要按钮（省手机空间） ===== */
+body.quiz .logo,body.quiz .search,body.quiz .hstat{display:none!important}
+body.quiz .topbar{padding-top:5px;padding-bottom:5px;gap:6px}
+body.quiz .main-head{padding-top:6px;padding-bottom:6px}
+@media (max-width:700px){
+  body.quiz .topbar{position:sticky;top:0;z-index:45}
+  body.quiz .seg button{padding:3px 8px;font-size:11.5px}
+  body.quiz .main-head .where{font-size:11.8px}
+}
+
+/* ===== 错题本「斩」/ 本卷详情 ===== */
+.zhan{flex:0 0 auto;font-size:11px;color:#8b93a1;border:1px solid var(--line);background:#fff;
+  border-radius:999px;padding:2px 9px;cursor:pointer;line-height:1.6}
+.zhan:hover{color:#e5484d;border-color:#f3bcbc;background:#fff6f6}
+.zhan.all{color:#e5484d;border-color:#f3bcbc;background:#fff6f6;font-weight:600}
+.setd{margin-left:6px;flex:0 0 auto;width:22px;height:22px;border-radius:6px;background:#f2f4f7;color:#8b93a1;
+  display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1}
+.setd:hover{background:var(--pri-soft);color:var(--pri)}
+.setcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin:0 0 9px}
+.setcard .t{font-size:13.5px;font-weight:600;line-height:1.4}
+.setcard .m{font-size:12px;color:var(--muted);margin-top:5px;display:flex;gap:12px;flex-wrap:wrap}
+.setcard .b{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.setcard .b .btn{height:30px;font-size:12px;padding:0 11px}
+
+/* ===== 折线图横向滚动 ===== */
+.chartx{overflow-x:auto;overflow-y:hidden;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.chartx::-webkit-scrollbar{height:5px}
+.chartx::-webkit-scrollbar-thumb{background:#d8dee8;border-radius:3px}
 /* ===== 错题本分组 / 首页数据卡 ===== */
 .wgrp{background:#fff;border:1px solid var(--line);border-radius:11px;margin:0 0 10px;overflow:hidden}
 .wgrp-h{display:flex;align-items:center;gap:8px;padding:10px 13px;background:#fafbfd;font-size:12.8px;font-weight:600}
@@ -552,7 +594,7 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 /* ================= 数据 ================= */
 const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
 const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
-let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{} };   // dk = 不会；mt=修改时间戳 del=删除时间戳（云端合并用）
+let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{}, zhan:{} };   // dk=不会；mt/del=同步时间戳；zhan=已斩（不再出现）
 let notes = {};
 /* ================= 成绩记录 / 错题·收藏库 ================= */
 const LS_SCORE='cs3_scores_v1';
@@ -570,6 +612,28 @@ function untouch(kind,tid){
   store.del=store.del||{}; (store.del[kind]=store.del[kind]||{})[tid]=t;
 }
 function hitWrong(tid){ store.wrong[tid]=(Number(store.wrong[tid])||0)+1; stamp('wrong',tid); }
+
+/* ================= 斩题 =================
+   斩掉的题：从错题/收藏/不会里移除，以后刷卷/重刷都不再出现（只存本机） */
+function zhanTid(tid){
+  store.zhan=store.zhan||{}; store.zhan[tid]=Date.now();
+  delete store.wrong[tid]; delete store.fav[tid]; if(store.dk) delete store.dk[tid];
+  save(); renderAll();
+}
+function zhanGroup(list){
+  if(!list||!list.length) return;
+  uiConfirm('斩掉这 '+list.length+' 题？\n\n斩掉后不再出现在错题本和刷题里（可在错题本底部「恢复已斩」找回）。', function(){
+    store.zhan=store.zhan||{};
+    list.forEach(function(t){ store.zhan[t]=Date.now(); delete store.wrong[t]; delete store.fav[t]; if(store.dk) delete store.dk[t]; });
+    save(); renderAll();
+  }, {title:'斩题', okText:'斩掉', danger:true});
+}
+function unzhanAll(){
+  const n=Object.keys(store.zhan||{}).length; if(!n) return;
+  uiConfirm('恢复已斩的 '+n+' 题？（只是解除“不再出现”，不会自动变回错题）', function(){
+    store.zhan={}; save(); renderAll();
+  }, {title:'恢复已斩', okText:'恢复'});
+}
 
 /* ================= 云端同步（成绩 / 错题 / 收藏） =================
    读：GitHub raw（公开，无需凭据）；写：需本机保存的 GitHub Token。
@@ -835,13 +899,46 @@ function uiConfirm(text, onOk, opt){
 function uiConfirmClose(){ const m=document.getElementById('mck'); if(m) m.classList.remove('on'); _ckOk=null; }
 function uiConfirmOk(){ const f=_ckOk; uiConfirmClose(); if(f){ try{ f(); }catch(e){} } }
 
-/* 切题滑动过渡：dir='L' = 下一题（新题从右进），'R' = 上一题 */
-function animQ(dir){
+/* 切题滑动过渡：旧题滑出 + 新题滑入（真正“连续切页”，而不是瞬间替换） */
+function snapCard(){
+  const w=document.getElementById('qwrap');
+  const c=w&&w.querySelector('.qcard');
+  return c?c.cloneNode(true):null;
+}
+function animQ(dir, ghost){
   const w=document.getElementById('qwrap'); if(!w) return;
+  if(ghost){
+    ghost.classList.add('qcard-ghost');
+    ghost.classList.add(dir==='R'?'ghostR':'ghostL');
+    w.appendChild(ghost);
+  }
   w.classList.remove('slidL','slidR');
   void w.offsetWidth;
   w.classList.add(dir==='R'?'slidR':'slidL');
-  setTimeout(function(){ w.classList.remove('slidL','slidR'); }, 340);
+  setTimeout(function(){
+    w.classList.remove('slidL','slidR');
+    if(ghost&&ghost.parentNode) ghost.parentNode.removeChild(ghost);
+  }, 380);
+}
+
+/* 多按钮弹窗（考试模式选择“清空/保留”） */
+let _askCb=null;
+function mcAsk(title, text, opts){
+  let m=document.getElementById('mck');
+  if(!m){ m=document.createElement('div'); m.id='mck'; m.className='mck'; document.body.appendChild(m); }
+  _askCb=opts;
+  m.innerHTML='<div class="mck-b"><div class="mck-t">'+esc(title)+'</div>'
+    +'<div class="mck-c">'+esc(text)+'</div><div class="mck-f" style="flex-direction:column;gap:8px">'
+    +opts.map(function(o,i){ return '<button class="btn '+(o.pri?'pri':'line')+'" style="width:100%;justify-content:center" onclick="mcAskPick('+i+')">'+esc(o.t)+'</button>'; }).join('')
+    +'</div></div>';
+  m.classList.add('on');
+  m.onclick=function(e){ if(e.target===m) mcAskClose(); };
+}
+function mcAskClose(){ const m=document.getElementById('mck'); if(m) m.classList.remove('on'); _askCb=null; }
+function mcAskPick(i){
+  const opts=_askCb||[]; _askCb=null;
+  const m=document.getElementById('mck'); if(m) m.classList.remove('on');
+  const o=opts[i]; if(o && typeof o.fn==='function') o.fn();
 }
 
 /* ===== 题序 / 卷名 / 题级统计（错题本、口诀、首页共用） ===== */
@@ -886,29 +983,52 @@ window.addEventListener('resize', function(){
 });
 
 
+/* 卷名压缩成短标签：“27腿姐8套卷·第一套” → “腿姐8-一” */
+function chartLabel(t){
+  t=String(t||'').replace('（已更新）','').trim();
+  const p=t.split('·');
+  let a=p[0].replace(/^\d+/, '').replace(/套卷/g, '').replace(/[（(].*?[）)]/g, '');
+  let b=(p[1]||'').replace(/^第/, '').replace(/套.*$/, '');
+  a=a.slice(0,5); b=b.slice(0,3);
+  return b ? (a+'-'+b) : a;
+}
+
 function scoreChart(data){
   if(!data.length) return '<div class="empty" style="padding:26px;font-size:12.5px">交卷后这里会出现折线图</div>';
-  const W=560,H=150,pl=36,pr=12,pt=14,pb=20,iw=W-pl-pr,ih=H-pt-pb,n=data.length;
+  const n=data.length;
+  const step=(isMob()?58:62);
+  const W=Math.max((isMob()?Math.max(300,(window.innerWidth||360)-24):520), n*step+56), H=182;
+  const pl=34, pr=16, pt=16, pb=52, iw=W-pl-pr, ih=H-pt-pb;
   const pts=data.map(function(d,i){
     const r=d.full?d.score/d.full:0;
     const x=pl+(n===1?iw/2:iw*i/(n-1));
-    return [x,pt+ih*(1-r),r];
+    return {x:x, y:pt+ih*(1-r), r:r, d:d};
   });
-  const line=pts.map(function(p,i){return (i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)}).join(' ');
-  const area=line+' L'+pts[n-1][0].toFixed(1)+','+(pt+ih)+' L'+pts[0][0].toFixed(1)+','+(pt+ih)+' Z';
+  const lineStr=pts.map(function(p,i){return (i?'L':'M')+p.x.toFixed(1)+','+p.y.toFixed(1)}).join(' ');
+  const area=lineStr+' L'+pts[n-1].x.toFixed(1)+','+(pt+ih)+' L'+pts[0].x.toFixed(1)+','+(pt+ih)+' Z';
   let grid='';
   [0,0.5,1].forEach(function(g){
     const y=pt+ih*(1-g);
     grid+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="#eef1f5"/>'
         +'<text x="'+(pl-6)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="9.5" fill="#a3aab6">'+(g*100)+'%</text>';
   });
-  const dots=pts.map(function(p){
-    return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.8" fill="#fff" stroke="#0866ff" stroke-width="2"><title>'+Math.round(p[2]*100)+'%</title></circle>';
-  }).join('');
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">'+grid
+  let marks='';
+  pts.forEach(function(p){
+    const d=p.d, pct=Math.round(p.r*100);
+    const col=pct>=80?'#12a150':(pct>=60?'#e08a00':'#d4380d');
+    const dt=new Date(d.ts);
+    const lab=chartLabel(d.title);
+    marks+='<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3" fill="#fff" stroke="#0866ff" stroke-width="2">'
+      +'<title>'+esc(String(d.title||''))+'\n'+d.score+'/'+d.full+' · '+pct+'%</title></circle>'
+      +'<text x="'+p.x.toFixed(1)+'" y="'+(p.y-9).toFixed(1)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="'+col+'">'+pct+'</text>'
+      +'<text x="'+p.x.toFixed(1)+'" y="'+(pt+ih+14)+'" text-anchor="middle" font-size="9.5" fill="#5b6270">'+esc(lab)+'</text>'
+      +'<text x="'+p.x.toFixed(1)+'" y="'+(pt+ih+26)+'" text-anchor="middle" font-size="9" fill="#b3bac5">'+((dt.getMonth()+1)+'/'+dt.getDate())+'</text>';
+  });
+  return '<div class="chartx"><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" style="display:block;flex:none">'+grid
     +'<path d="'+area+'" fill="rgba(8,102,255,.07)"/>'
-    +'<path d="'+line+'" fill="none" stroke="#0866ff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
-    +dots+'</svg>';
+    +'<path d="'+lineStr+'" fill="none" stroke="#0866ff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
+    +marks+'</svg></div>'
+    + (n>6?'<div style="font-size:11px;color:#b3bac5;padding:4px 2px 0">← 左右拖动查看全部 '+n+' 次 →</div>':'');
 }
 
 function exportList(kind){
@@ -931,23 +1051,32 @@ function removeFrom(kind,tid){ delete store[kind][tid]; untouch(kind,tid); save(
 
 /* 错题本：按考点 / 按试卷 两级分组，带错次 + 题级正确率 */
 function renderWrongBook(wrap){
-  const wr=Object.keys(store.wrong||{});
+  const allWr=Object.keys(store.wrong||{});
   const ord=qOrderMap(), sm=setMap();
   const grp=S.wrongGroup||'kd';
+  const curIds=(S.wrongOnlySet&&S.quiz)?S.quiz.ids.reduce(function(m,t){m[t]=1;return m},{}):null;
+  const wr=curIds?allWr.filter(function(t){return curIds[t];}):allWr.slice();
   wr.sort(function(a,b){ return ((ord[a]===undefined?9e9:ord[a])-(ord[b]===undefined?9e9:ord[b])); });
-  const groups={}, order=[];
+  const groups={}, order=[], GNAME={kd:'考点',set:'试卷',times:'错误次数'};
   wr.forEach(function(t){
     const q=DB.questions[t]||{};
-    const key = grp==='kd' ? (q.kaodian||'未标注考点') : (sm[t]||'未归入套卷');
-    if(!groups[key]){ groups[key]={list:[],min:(ord[t]===undefined?9e9:ord[t])}; order.push(key); }
+    let key,min;
+    if(grp==='set'){ key=sm[t]||'未归入套卷'; min=(ord[t]===undefined?9e9:ord[t]); }
+    else if(grp==='times'){ const n=Number(store.wrong[t])||0; key=n>=3?'错 3 次以上':(n===2?'错 2 次':'错 1 次'); min=n>=3?0:(n===2?1:2); }
+    else { key=q.kaodian||'未标注考点'; min=(ord[t]===undefined?9e9:ord[t]); }
+    if(!groups[key]){ groups[key]={list:[],min:min}; order.push(key); }
+    if(min<groups[key].min) groups[key].min=min;
     groups[key].list.push(t);
   });
-  if(grp==='set') order.sort(function(a,b){ return groups[a].min-groups[b].min; });
-  let h='<div class="panel"><div class="panel-h">错题本<span>'+wr.length+' 题 · 按'+(grp==='kd'?'考点':'试卷')+'顺序</span></div>'
+  if(grp!=='times') order.sort(function(a,b){ return groups[a].min-groups[b].min; });
+  const zhanN=Object.keys(store.zhan||{}).length;
+  let h='<div class="panel"><div class="panel-h">错题本<span>'+wr.length+' 题 · 按'+GNAME[grp]+'顺序'+(curIds?' · 只看本卷':'')+'</span></div>'
     +'<div class="toolbar">'
-    +'<button class="btn pri" onclick="startQuiz(Object.keys(store.wrong),\'错题本\')">全部重刷 '+wr.length+' 题</button>'
+    +'<button class="btn pri" onclick="startQuiz(Object.keys(store.wrong),\'错题本\')">全部重刷 '+allWr.length+' 题</button>'
     +'<button class="btn '+(grp==='kd'?'':'line')+'" onclick="S.wrongGroup=\'kd\';renderAll()">按考点</button>'
     +'<button class="btn '+(grp==='set'?'':'line')+'" onclick="S.wrongGroup=\'set\';renderAll()">按试卷</button>'
+    +'<button class="btn '+(grp==='times'?'':'line')+'" onclick="S.wrongGroup=\'times\';renderAll()">按次数</button>'
+    +(S.quiz?'<button class="btn '+(S.wrongOnlySet?'pri':'line')+'" onclick="S.wrongOnlySet=!S.wrongOnlySet;renderAll()">只看本卷</button>':'')
     +'<button class="btn line" onclick="exportList(\'wrong\')">导出</button>'
     +'<button class="btn line" onclick="clearList(\'wrong\')">清空</button>'
     +'</div><div style="padding:12px 13px;max-height:calc(100vh - 260px);overflow:auto">';
@@ -955,7 +1084,8 @@ function renderWrongBook(wrap){
     const list=groups[k].list;
     const lj=JSON.stringify(list).replace(/"/g,'&quot;');
     h+='<div class="wgrp"><div class="wgrp-h">'+esc(k)+'<span class="c">'+list.length+' 题</span>'
-      +'<span class="go" onclick="startQuiz('+lj+',\'错题·'+(grp==='kd'?'考点':'试卷')+'\')">刷这组 ›</span></div>';
+      +'<span class="go" onclick="startQuiz('+lj+',\'错题·'+GNAME[grp]+'\')">刷这组 ›</span>'
+      +'<span class="zhan" onclick="zhanGroup('+lj+')">斩本组</span></div>';
     list.forEach(function(t,i){
       const q=DB.questions[t]||{}, n=Number(store.wrong[t])||0, rt=tidRate(t);
       const col=rt?(rt.pct>=60?'#12a150':(rt.pct>=40?'#e08a00':'#d4380d')):'#b3bac5';
@@ -963,13 +1093,74 @@ function renderWrongBook(wrap){
         +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
         +(n>1?'<span class="badge">错 '+n+' 次</span>':'<span class="badge" style="background:#f2f4f7;color:#5b6270">错 1 次</span>')
         +(rt?'<span style="color:'+col+';font-weight:600;min-width:38px;text-align:right" title="做过 '+rt.n+' 次，对 '+rt.ok+' 次">'+rt.pct+'%</span>':'')
+        +'<span class="zhan" title="斩掉（不再出现）" onclick="event.stopPropagation();zhanTid(\''+t+'\')">斩</span>'
         +'</div>';
     });
     h+='</div>';
   });
-  if(!wr.length) h+='<div class="empty">还没有错题，刷题时答错会自动收进来</div>';
-  h+='</div></div>';
+  if(!wr.length) h+='<div class="empty">'+(curIds?'本卷没有错题':'还没有错题，刷题时答错会自动收进来')+'</div>';
+  h+='</div>';
+  if(zhanN) h+='<div style="padding:0 13px 14px;font-size:12px;color:#b3bac5">已斩 '+zhanN+' 题 · <span style="color:#0866ff;cursor:pointer" onclick="unzhanAll()">恢复已斩</span></div>';
+  h+='</div>';
   wrap.innerHTML=h;
+}
+
+/* ===== 单套卷详情：本卷统计 + 本卷错题/收藏 + 斩题 ===== */
+function openSetDetail(bi,si){
+  S.setView={bi:bi,si:si};
+  if(typeof closeDrawer==='function') closeDrawer();
+  renderAll();
+}
+function startSetQuiz(){ const v=S.setView; if(!v) return; S.setView=null; startQuizBySet(v.bi,v.si); }
+function renderSetView(head,wrap,tools){
+  tools.style.display='none';
+  const v=S.setView, b=DB.books[v.bi]||{}, s=(b.sets||[])[v.si]||{items:[],set:''};
+  const title=(b.name?b.name.replace('（已更新）','')+' · '+s.set:s.set);
+  const allIds=s.items||[];
+  const ids=allIds.filter(function(t){return !(store.zhan&&store.zhan[t]);});
+  const dnN=ids.filter(function(t){return store.done[t];}).length;
+  const okN=ids.filter(function(t){return store.done[t]==='ok';}).length;
+  const wr=ids.filter(function(t){return store.wrong[t];});
+  const fv=ids.filter(function(t){return store.fav[t];});
+  const zh=allIds.length-ids.length;
+  head.innerHTML='<button class="btn line" style="height:29px;padding:0 10px;font-size:12.5px;flex:0 0 auto" onclick="S.setView=null;renderAll()">← 返回</button>'
+    +'<div class="where"><b>'+esc(title)+'</b></div>';
+  const lj=function(a){return JSON.stringify(a).replace(/"/g,'&quot;');};
+  let h='<div class="statgrid">'
+    +'<div class="statc"><b>'+ids.length+'</b><span>本卷题数</span></div>'
+    +'<div class="statc"><b>'+dnN+'</b><span>已刷</span></div>'
+    +'<div class="statc"><b>'+(dnN?pct(okN,dnN):0)+'%</b><span>正确率</span></div>'
+    +'<div class="statc"><b>'+wr.length+'</b><span>本卷错题</span></div>'
+    +'</div>'
+    +'<div class="setcard"><div class="m" style="margin-top:0"><span>总 '+ids.length+' 题</span><span>已刷 '+dnN+'</span><span>收藏 '+fv.length+'</span>'+(zh?'<span>已斩 '+zh+'</span>':'')+'</div>'
+    +'<div class="b">'
+    +'<button class="btn pri" onclick="startSetQuiz()">开始刷本卷</button>'
+    +(wr.length?'<button class="btn" onclick="startQuiz('+lj(wr)+',\'本卷错题\')">只刷本卷错题 '+wr.length+'</button>':'')
+    +'<button class="btn line" onclick="S.setView=null;S.quiz=null;S.rectab=\'wrong\';S.wrongOnlySet=false;switchNav(\'record\')">去错题本 ›</button>'
+    +'</div></div>';
+  h+='<div class="wgrp"><div class="wgrp-h">本卷错题<span class="c">'+wr.length+' 题</span>'
+    +(wr.length?'<span class="go" onclick="startQuiz('+lj(wr)+',\'本卷错题\')">刷这组 ›</span><span class="zhan" onclick="zhanGroup('+lj(wr)+')">斩本组</span>':'')+'</div>';
+  wr.forEach(function(t,i){
+    const q=DB.questions[t]||{}, n=Number(store.wrong[t])||0, rt=tidRate(t);
+    h+='<div class="wrow" onclick="startQuiz([\''+t+'\'],\'错题本\')"><span class="n">'+(i+1)+'</span>'
+      +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
+      +'<span class="badge">错 '+n+' 次</span>'
+      +(rt?'<span style="color:'+(rt.pct>=60?'#12a150':(rt.pct>=40?'#e08a00':'#d4380d'))+';font-weight:600;min-width:38px;text-align:right">'+rt.pct+'%</span>':'')
+      +'<span class="zhan" title="斩掉（不再出现）" onclick="event.stopPropagation();zhanTid(\''+t+'\')">斩</span></div>';
+  });
+  if(!wr.length) h+='<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无错题</div>';
+  h+='</div>';
+  h+='<div class="wgrp"><div class="wgrp-h">本卷收藏<span class="c">'+fv.length+' 题</span>'
+    +(fv.length?'<span class="go" onclick="startQuiz('+lj(fv)+',\'本卷收藏\')">刷这组 ›</span>':'')+'</div>';
+  fv.forEach(function(t,i){
+    const q=DB.questions[t]||{};
+    h+='<div class="wrow" onclick="startQuiz([\''+t+'\'],\'收藏\')"><span class="n">'+(i+1)+'</span>'
+      +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
+      +'<span class="zhan" title="从收藏移除" onclick="event.stopPropagation();zhanTid(\''+t+'\')">斩</span></div>';
+  });
+  if(!fv.length) h+='<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无收藏（题目右上 ☆ 可收藏）</div>';
+  h+='</div>';
+  wrap.innerHTML='<div style="max-width:840px;margin:0 auto">'+h+'</div>';
 }
 
 function renderRecordPanel(head,wrap,tools){
@@ -984,7 +1175,7 @@ function renderRecordPanel(head,wrap,tools){
     }).join('')+'</div><div class="rec-tip" style="font-size:12px;color:var(--muted)">数据只存在本机浏览器</div>';
 
   if(S.rectab==='stats'){
-    const sc=loadScores(), last=sc.slice(-20);
+    const sc=loadScores(), all=sc;
     const dn=Object.keys(store.done).length;
     const okN=Object.values(store.done).filter(function(x){return x==='ok'}).length;
     const avg=sc.length?Math.round(sc.reduce(function(a,x){return a+(x.full?x.score/x.full:0)},0)/sc.length*100):0;
@@ -996,8 +1187,8 @@ function renderRecordPanel(head,wrap,tools){
       +'<div class="statc"><b>'+sc.length+'</b><span>交卷次数</span></div>'
       +'<div class="statc"><b>'+avg+'%</b><span>平均得分率</span></div>'
       +'</div>'
-      +'<div class="panel"><div class="panel-h">成绩趋势<span>最近 '+last.length+' 次 · 最高 '+best+'%</span></div>'
-      +scoreChart(last)+'</div>';
+      +'<div class="panel"><div class="panel-h">成绩趋势<span>共 '+all.length+' 次 · 最高 '+best+'%</span></div>'
+      +scoreChart(all)+'</div>';
     if(sc.length){
       h+='<div class="panel"><div class="panel-h">最近记录<span>共 '+sc.length+' 条</span></div><div class="rlist">'
         +sc.slice().reverse().slice(0,15).map(function(x){
@@ -1208,6 +1399,7 @@ function renderAll(){ renderSide(); renderMain(); renderDetail();
   // 评论区永远排在主区最下面（解析、口诀都在它上面）
   const _c=document.getElementById('cmtBox'); if(_c&&_c.parentNode) _c.parentNode.appendChild(_c);
   renderHstat();
+  document.body.classList.toggle('quiz', !!(S.quiz||S.setView));
   document.querySelectorAll('#modeseg button').forEach(b=>b.classList.toggle('on',b.dataset.m===S.mode)); }
 function renderHstat(){
   const dn=Object.keys(store.done).length, okN=Object.values(store.done).filter(x=>x==='ok').length;
@@ -1233,7 +1425,8 @@ function sideSets(){
       const n=s.items.filter(t=>store.done[t]).length;
       const on=S.quiz&&S.quiz.title===b.name+' '+s.set;
       h+=`<div class="li ${on?'on':''}" onclick="startQuizBySet(${S.sideBook},${i})">
-        <span class="t">${esc(s.set)}</span><span class="bar"><i style="width:${pct(n,s.count)}%"></i></span><span class="c">${n}/${s.count}</span></div>`;
+        <span class="t">${esc(s.set)}</span><span class="bar"><i style="width:${pct(n,s.count)}%"></i></span><span class="c">${n}/${s.count}</span>
+        <span class="setd" title="本卷详情：错题/收藏/斩题" onclick="event.stopPropagation();openSetDetail(${S.sideBook},${i})">›</span></div>`;
     });
     return h;
   }
@@ -1340,7 +1533,8 @@ function startQuizBySet(bi,si){ if(typeof closeDrawer==='function') closeDrawer(
   s.items.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; });  // 重刷：清这一套的旧作答
   startQuiz(s.items, b.name.replace('（已更新）','')+' · '+s.set, null, true); }
 function startQuiz(ids,title,atTid,resetHist){ if(typeof closeDrawer==='function') closeDrawer();
-  if(!ids||!ids.length) return;
+  ids=(ids||[]).filter(function(t){ return !(store.zhan&&store.zhan[t]); });
+  if(!ids.length){ if(title&&title.indexOf('错题')>=0) alert('这些题都已被斩掉了（错题本底部可「恢复已斩」）'); return; }
   if(!resetHist && S.quiz && (S.quiz.ids!==ids || S.quiz.title!==title)){
     S.hist.push({quiz:{ids:S.quiz.ids,title:S.quiz.title}, idx:S.idx});
     if(S.hist.length>30) S.hist.shift();
@@ -1364,6 +1558,7 @@ function openMantra(tid){
 function renderMain(){
   let _lastTid=S._lastTid;
   const head=document.getElementById('mainhead'), wrap=document.getElementById('qwrap'), tools=document.getElementById('tools');
+  if(S.setView){ renderSetView(head,wrap,tools); return; }
   if(S.nav==='record'&&!S.quiz){ renderRecordPanel(head,wrap,tools); return; }
   if(!S.quiz){
     head.innerHTML=''; tools.style.display='none';
@@ -1379,8 +1574,8 @@ function renderMain(){
       +'<div class="statc"><b>'+wrN+'</b><span>待复习错题</span></div>'
       +'<div class="statc"><b>'+sc.length+'</b><span>交卷次数</span></div>'
       +'</div>'
-      +'<div class="panel"><div class="panel-h">成绩趋势<span>'+(sc.length?('最近 '+Math.min(sc.length,10)+' 次 · 平均得分率 '+avg+'%'):'交卷后自动出现折线图')+'</span></div>'
-      +scoreChart(sc.slice(-10))+'</div>'
+      +'<div class="panel"><div class="panel-h">成绩趋势<span>'+(sc.length?('共 '+sc.length+' 次 · 平均得分率 '+avg+'%'):'交卷后自动出现折线图')+'</span></div>'
+      +scoreChart(sc)+'</div>'
       +'<div class="panel"><div class="panel-h">开始练习<span>'+DB.meta.sets+' 套 · '+DB.meta.total+' 题 · '+Object.keys(DB.mantras).length+' 题带口诀</span></div>'
       +'<div style="padding:14px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">'
       +(last?'<button class="btn pri" onclick="resumeLast()">继续上次：'+esc(String(last.title||'').slice(0,22))+'</button>':'')
@@ -1408,18 +1603,18 @@ function renderMain(){
     <div class="q-num"><b>${i+1}</b>/${ids.length}</div>`;
 
   const keys=Object.keys(q.xuanxiang||{}).sort();
-  const stemNote=isMob()?'':noteText(tid);   // 手机上不显示题干笔记（挤版面，选项笔记保留）
+  const stemNote=(isMob()||!revealed)?'':noteText(tid);   // 手机上/未作答时不出题干笔记
 
   let h=`<div class="qcard"><div class="q-meta">
       <span class="qtype">[${q.type==='多选'?'多选题':'单选题'}]</span>
       <span style="font-size:13px;font-weight:600;color:#3d4450">${i+1}.</span>
       <span class="spacer" style="flex:1"></span>
-      <span class="cmtlink" onclick="cmtGoto()">💬 评论</span>
+      ${revealed?`<span class="cmtlink" onclick="cmtGoto()">💬 评论</span>`:''}
       <span class="favbtn ${store.fav[tid]?'on':''}" onclick="toggleFav('${tid}')" title="${store.fav[tid]?'取消收藏':'收藏'}">${store.fav[tid]?'★':'☆'}</span>
     </div>
     ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「确认选项」</div>':''}
     <div class="q-title">${esc(q.title)}
-      ${isMob()?'':`<span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>`}
+      ${(isMob()||!revealed)?'':`<span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>`}
     </div>
     ${q.kaodian?`<div class="cd-kd" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">🔖 ${esc(q.kaodian)}<span class="ar">›</span></div>`:`<div class="cd-kd static">🔖 未标注考点</div>`}
     ${stemNote?`<div style="background:var(--note-soft);border-left:3px solid var(--note);border-radius:7px;padding:8px 11px;margin:-6px 0 14px;font-size:13px;line-height:1.65;color:#4b3a7a;white-space:pre-wrap">${esc(stemNote)}</div>`:''}
@@ -1428,11 +1623,11 @@ function renderMain(){
     let cls='';
     if(revealed){ if(q.answer.includes(k)) cls='ok'; else if(ans.includes(k)) cls='no'; }
     else if(ans.includes(k)) cls='sel';
-    const nk=tid+'|'+k, has=noteText(nk);
+    const nk=tid+'|'+k, has=revealed?noteText(nk):'';
     h+=`<div class="opt ${cls}" data-k="${k}">
       <span class="k" onclick="pick('${k}')">${k}</span>
       <span class="v" onclick="pick('${k}')" style="cursor:pointer">${esc((q.xuanxiang[k]||'').replace(new RegExp('^'+k+'[.、．]\\s*'),''))}</span>
-      <span class="o-nbtn ${has?'has':''}" title="选项笔记" onclick="event.stopPropagation();editNote('${tid}','opt:${k}',this)">📝</span>
+      ${revealed?`<span class="o-nbtn ${has?'has':''}" title="选项笔记" onclick="event.stopPropagation();editNote('${tid}','opt:${k}',this)">📝</span>`:''}
     </div>
     ${has?`<div style="margin:-4px 0 6px 30px;background:var(--note-soft);border-left:3px solid var(--note);border-radius:6px;padding:6px 10px;font-size:12.5px;line-height:1.6;color:#4b3a7a;white-space:pre-wrap">${esc(has)}</div>`:''}`;
   });
@@ -1463,12 +1658,16 @@ function renderMain(){
   }
   h+='</div>';
   // 评论区挂在题目下面：先摘下来，重绘主区后再放回（避免选答案时被清空）
+  // 未作答时不显示评论区/笔记：题目页保持干净，答完题才出现
   const _cmt=document.getElementById('cmtBox');
   if(_cmt && _cmt.dataset.tid!==tid){ _cmt.remove(); }
   wrap.innerHTML=h;
   if(_lastTid!==tid){ wrap.scrollTop=0; }
   S._lastTid=tid;
-  if(_cmt && _cmt.dataset.tid===tid) wrap.appendChild(_cmt);
+  if(!revealed){
+    if(_cmt) _cmt.remove();
+    CMT.tid=tid;
+  } else if(_cmt && _cmt.dataset.tid===tid) wrap.appendChild(_cmt);
   else cmtMount(tid);
 
   tools.style.display='flex';
@@ -1565,8 +1764,8 @@ function openRel(fromTid, target){
   startQuiz(ids, '同考点：'+(q.kaodian||''), target);
 }
 function revealNow(){ if(!S.quiz) return; S.revealed[S.quiz.ids[S.idx]]=true; renderAll(); }
-function prev(){ if(S.quiz&&S.idx>0){S.idx--;closeNote();renderAll();animQ('R');} }
-function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){S.idx++;closeNote();renderAll();animQ('L');} }
+function prev(){ if(S.quiz&&S.idx>0){ const g=snapCard(); S.idx--; closeNote(); renderAll(); animQ('R',g); } }
+function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){ const g=snapCard(); S.idx++; closeNote(); renderAll(); animQ('L',g); } }
 function toggleFav(tid){ if(store.fav[tid]){ delete store.fav[tid]; untouch('fav',tid); } else { store.fav[tid]=1; stamp('fav',tid); } save(); renderAll(); }
 
 /* ================= 笔记 ================= */
@@ -1631,8 +1830,8 @@ function renderDetail(){
   if(!revealed){
     hd.textContent='';
     const tip=`${S.mode==='exam'?'考试模式：交卷后显示':'选好选项后点「确认选项」显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示（不计分）</span>`;
-    if(mob) setMobDetail(`<div class="empty-detail" style="height:auto;padding:4px 0">${tip}</div>`);
-    else el.innerHTML=`<div class="empty-detail">${tip}</div>`;
+    if(mob){ clearMobDetail(); return; }
+    el.innerHTML=`<div class="empty-detail">${tip}</div>`;
     return;
   }
   const right=isRight(q,ans);
@@ -1719,7 +1918,25 @@ function closeSheet(){ document.getElementById('mask').classList.remove('on'); d
 function jump(j){ S.idx=j; closeSheet(); closeNote(); renderAll(); }
 
 /* ================= 模式 / 搜索 ================= */
-function setMode(m){ S.mode=m; renderAll(); }
+function setMode(m){
+  if(m===S.mode) return;
+  if(m==='exam' && S.quiz){
+    const ids=S.quiz.ids;
+    const answered=ids.filter(function(t){ return (S.answers[t]||[]).length>0; }).length;
+    if(answered>0){
+      mcAsk('进入考试模式', '当前卷已作答 '+answered+' 题（共 '+ids.length+' 题）。要怎么进考试？', [
+        {t:'保留当前作答，直接进入考试模式', pri:true, fn:function(){ S.mode='exam'; renderAll(); }},
+        {t:'清空本卷作答，重新开考', fn:function(){
+          ids.forEach(function(t){ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; });
+          S.idx=0; S.submitted=false; S.mode='exam'; renderAll();
+        }},
+        {t:'取消，继续练习', fn:function(){}}
+      ]);
+      return;
+    }
+  }
+  S.mode=m; renderAll();
+}
 function globalSearch(kw){
   kw=(kw||'').trim();
   if(!kw) return;
