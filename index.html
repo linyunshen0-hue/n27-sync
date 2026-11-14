@@ -192,6 +192,33 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 
 @media (max-width:1240px){.detail{flex:0 0 320px}.hstat{display:none}}
 @media (max-width:1040px){.detail{display:none}.side{flex:0 0 250px}}
+
+/* ===== 成绩 / 错题库 / 收藏库 ===== */
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}
+.statc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.statc b{display:block;font-size:22px;font-weight:800;color:#1d2129;line-height:1.15}
+.statc span{font-size:11.5px;color:var(--muted)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;margin:0 0 14px;overflow:hidden}
+.panel-h{padding:11px 14px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.panel-h span{font-weight:400;color:var(--muted);font-size:11.5px}
+.rlist{max-height:300px;overflow:auto}
+.rrow{display:flex;gap:10px;align-items:center;padding:8px 14px;border-top:1px solid #f2f4f7;font-size:12.5px}
+.rrow:first-child{border-top:0}
+.rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs{font-weight:700;white-space:nowrap}
+.rd{color:var(--muted);font-size:11px;white-space:nowrap}
+.toolbar{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.qlist{max-height:calc(100vh - 250px);overflow:auto}
+.qrow{padding:9px 14px;border-top:1px solid #f2f4f7;cursor:pointer}
+.qrow:first-child{border-top:0}
+.qrow:hover{background:#fafbfd}
+.qt{font-size:13px;color:#1d2129;display:flex;gap:8px;align-items:baseline;line-height:1.5}
+.qm{display:flex;gap:8px;align-items:center;margin-top:5px;font-size:11.5px;color:var(--muted)}
+.kd{color:#0866ff}
+.badge{background:#fff1f0;color:#d4380d;border-radius:5px;padding:0 5px}
+.sp{flex:1}
+.xbtn{border:0;background:transparent;color:#c2c8d2;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:5px}
+.xbtn:hover{background:#fff1f0;color:#d4380d}
 </style>
 </head>
 <body>
@@ -256,6 +283,122 @@ const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
 const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
 let store = { done:{}, wrong:{}, fav:{}, dk:{} };   // dk = 不会
 let notes = {};
+/* ================= 成绩记录 / 错题·收藏库 ================= */
+const LS_SCORE='cs3_scores_v1';
+function loadScores(){ try{const a=JSON.parse(localStorage.getItem(LS_SCORE)||'[]');return Array.isArray(a)?a:[]}catch(e){return []} }
+function saveScores(a){ try{localStorage.setItem(LS_SCORE,JSON.stringify(a))}catch(e){} }
+function recordScore(o){ const a=loadScores(); a.push(o); if(a.length>300) a.splice(0,a.length-300); saveScores(a); }
+function hitWrong(tid){ store.wrong[tid]=(Number(store.wrong[tid])||0)+1; }
+
+function scoreChart(data){
+  if(!data.length) return '<div class="empty" style="padding:26px;font-size:12.5px">交卷后这里会出现折线图</div>';
+  const W=560,H=150,pl=36,pr=12,pt=14,pb=20,iw=W-pl-pr,ih=H-pt-pb,n=data.length;
+  const pts=data.map(function(d,i){
+    const r=d.full?d.score/d.full:0;
+    const x=pl+(n===1?iw/2:iw*i/(n-1));
+    return [x,pt+ih*(1-r),r];
+  });
+  const line=pts.map(function(p,i){return (i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)}).join(' ');
+  const area=line+' L'+pts[n-1][0].toFixed(1)+','+(pt+ih)+' L'+pts[0][0].toFixed(1)+','+(pt+ih)+' Z';
+  let grid='';
+  [0,0.5,1].forEach(function(g){
+    const y=pt+ih*(1-g);
+    grid+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="#eef1f5"/>'
+        +'<text x="'+(pl-6)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="9.5" fill="#a3aab6">'+(g*100)+'%</text>';
+  });
+  const dots=pts.map(function(p){
+    return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.8" fill="#fff" stroke="#0866ff" stroke-width="2"><title>'+Math.round(p[2]*100)+'%</title></circle>';
+  }).join('');
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">'+grid
+    +'<path d="'+area+'" fill="rgba(8,102,255,.07)"/>'
+    +'<path d="'+line+'" fill="none" stroke="#0866ff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
+    +dots+'</svg>';
+}
+
+function exportList(kind){
+  const ids=Object.keys(store[kind]||{});
+  const out=ids.map(function(tid){const q=DB.questions[tid]||{};
+    return {tid:tid,type:q.type,title:q.title,kaodian:q.kaodian,chuchu:q.chuchu,times:Number(store[kind][tid])||0};});
+  const blob=new Blob([JSON.stringify(out,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=kind+'-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){URL.revokeObjectURL(a.href)},3000);
+}
+function clearList(kind){
+  if(!confirm('确定清空？此操作不可撤销')) return;
+  store[kind]={}; save(); renderAll();
+}
+function removeFrom(kind,tid){ delete store[kind][tid]; save(); renderAll(); }
+
+function renderRecordPanel(head,wrap,tools){
+  tools.style.display='none';
+  if(!S.rectab) S.rectab='stats';
+  const wr=Object.keys(store.wrong||{}), fv=Object.keys(store.fav||{}), dk=Object.keys(store.dk||{});
+  const cnt={stats:'',wrong:wr.length,fav:fv.length,dk:dk.length};
+  const tabs=[['stats','成绩统计'],['wrong','错题本'],['fav','收藏'],['dk','不会']];
+  head.innerHTML='<div class="seg" style="flex:0 0 auto">'+tabs.map(function(t){
+      return '<button class="'+(S.rectab===t[0]?'on':'')+'" onclick="S.rectab=\''+t[0]+'\';renderAll()">'
+        +t[1]+(cnt[t[0]]?' '+cnt[t[0]]:'')+'</button>';
+    }).join('')+'</div><div style="font-size:12px;color:var(--muted)">数据只存在本机浏览器</div>';
+
+  if(S.rectab==='stats'){
+    const sc=loadScores(), last=sc.slice(-20);
+    const dn=Object.keys(store.done).length;
+    const okN=Object.values(store.done).filter(function(x){return x==='ok'}).length;
+    const avg=sc.length?Math.round(sc.reduce(function(a,x){return a+(x.full?x.score/x.full:0)},0)/sc.length*100):0;
+    const best=sc.length?Math.max.apply(null,sc.map(function(x){return x.full?Math.round(x.score/x.full*100):0})):0;
+    let h='<div class="statgrid">'
+      +'<div class="statc"><b>'+dn+'</b><span>已刷 / '+DB.meta.total+'</span></div>'
+      +'<div class="statc"><b>'+(dn?pct(okN,dn):0)+'%</b><span>总正确率</span></div>'
+      +'<div class="statc"><b>'+sc.length+'</b><span>交卷次数</span></div>'
+      +'<div class="statc"><b>'+avg+'%</b><span>平均得分率</span></div>'
+      +'</div>'
+      +'<div class="panel"><div class="panel-h">成绩趋势<span>最近 '+last.length+' 次 · 最高 '+best+'%</span></div>'
+      +scoreChart(last)+'</div>';
+    if(sc.length){
+      h+='<div class="panel"><div class="panel-h">最近记录<span>共 '+sc.length+' 条</span></div><div class="rlist">'
+        +sc.slice().reverse().slice(0,15).map(function(x){
+          const r=x.full?Math.round(x.score/x.full*100):0;
+          const col=r>=80?'#12a150':(r>=60?'#e08a00':'#d4380d');
+          const dt=new Date(x.ts);
+          return '<div class="rrow"><span class="rt">'+esc((x.title||'').slice(0,26))+'</span>'
+            +'<span class="rs" style="color:'+col+'">'+x.score+'/'+x.full+' · '+r+'%</span>'
+            +'<span class="rd">'+(dt.getMonth()+1)+'/'+dt.getDate()+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+'</span></div>';
+        }).join('')+'</div></div>';
+    }
+    wrap.innerHTML=h;
+    return;
+  }
+
+  const ids=(S.rectab==='wrong'?wr:(S.rectab==='fav'?fv:dk));
+  const title={wrong:'错题本',fav:'我的收藏',dk:'不会的题'}[S.rectab];
+  const tip={wrong:'答错或未答会自动收进来；之后答对会自动移出',fav:'刷题时点题干右上角的 ☆ 收藏',dk:'刷题时点下方「不会」收进来'}[S.rectab];
+  if(!ids.length){
+    wrap.innerHTML='<div class="empty" style="padding-top:56px"><div style="font-size:30px;margin-bottom:10px">📭</div>'+tip+'</div>';
+    return;
+  }
+  const idsJson=JSON.stringify(ids).replace(/"/g,'&quot;');
+  wrap.innerHTML='<div class="panel">'
+    +'<div class="panel-h">'+title+'<span>'+ids.length+' 题</span></div>'
+    +'<div class="toolbar">'
+      +'<button class="btn pri" onclick="startQuiz('+idsJson+',\''+title+'\')">开始刷这 '+ids.length+' 题</button>'
+      +'<button class="btn line" onclick="exportList(\''+S.rectab+'\')">导出 JSON</button>'
+      +'<button class="btn line" onclick="clearList(\''+S.rectab+'\')">清空</button>'
+    +'</div><div class="qlist">'
+    +ids.map(function(tid){
+      const q=DB.questions[tid]||{}, n=Number(store.wrong[tid])||0;
+      const t=(q.title||'').slice(0,56);
+      return '<div class="qrow" onclick="startQuiz([\''+tid+'\'],\''+title+'\')">'
+        +'<div class="qt"><span class="tag">'+(q.type==='多选'?'多选':'单选')+'</span><span>'+esc(t)+((q.title||'').length>56?'…':'')+'</span></div>'
+        +'<div class="qm">'+(q.kaodian?'<span class="kd">'+esc(q.kaodian)+'</span>':'')
+        +(S.rectab==='wrong'&&n>1?'<span class="badge">错 '+n+' 次</span>':'')
+        +'<span class="sp"></span>'
+        +'<button class="xbtn" onclick="event.stopPropagation();removeFrom(\''+S.rectab+'\',\''+tid+'\')" title="移出">✕</button></div>'
+        +'</div>';
+    }).join('')+'</div></div>';
+}
+
 const S = { nav:'sets', mode:'practice', quiz:null, idx:0, answers:{}, revealed:{}, submitted:false,
             sideBook:null, openTree:new Set(), editNote:null, qIndex:null, hist:[] };
 
@@ -425,7 +568,7 @@ function renderHstat(){
 }
 
 /* ================= 左栏 ================= */
-function switchNav(n){ S.nav=n; S.sideBook=null; closeNote();
+function switchNav(n){ S.nav=n; S.sideBook=null; if(n==='record'){S.quiz=null;S.idx=0;} closeNote();
   document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===n));
   renderSide(); }
 function renderSide(){
@@ -566,6 +709,7 @@ function openMantra(tid){
 
 function renderMain(){
   const head=document.getElementById('mainhead'), wrap=document.getElementById('qwrap'), tools=document.getElementById('tools');
+  if(S.nav==='record'&&!S.quiz){ renderRecordPanel(head,wrap,tools); return; }
   if(!S.quiz){
     head.innerHTML=''; tools.style.display='none';
     wrap.innerHTML=`<div class="empty" style="padding-top:70px"><div style="font-size:32px;margin-bottom:10px">📘</div>
@@ -641,13 +785,13 @@ function pick(k){
 function rec(tid,arr){
   const q=DB.questions[tid], ok=isRight(q,arr);
   store.done[tid]= ok?'ok':'no';
-  if(ok){ delete store.wrong[tid]; delete (store.dk||{})[tid]; } else store.wrong[tid]=1;
+  if(ok){ delete store.wrong[tid]; delete (store.dk||{})[tid]; } else hitWrong(tid);
   save();
 }
 function dontKnow(){
   if(!S.quiz) return;
   const tid=S.quiz.ids[S.idx], q=DB.questions[tid];
-  store.dk=store.dk||{}; store.dk[tid]=1; store.wrong[tid]=1; store.done[tid]='no'; save();
+  store.dk=store.dk||{}; store.dk[tid]=1; hitWrong(tid); store.done[tid]='no'; save();
   const rel=sameKaodian(tid);
   if(!rel.length){ alert('这个考点只有这一道题（题库里没有同类题）'); renderAll(); return; }
   startQuiz(rel,'同考点：'+(q.kaodian||''));
@@ -767,11 +911,11 @@ function submit(){
   ids.forEach(t=>{
     const q=DB.questions[t], pt=q.type==='多选'?2:1; full+=pt;
     const a=S.answers[t]||[];
-    if(!a.length){ blank++; store.done[t]='no'; store.wrong[t]=1; return; }
+    if(!a.length){ blank++; store.done[t]='no'; hitWrong(t); return; }
     if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; delete store.wrong[t]; }
-    else { noN++; store.done[t]='no'; store.wrong[t]=1; }
+    else { noN++; store.done[t]='no'; hitWrong(t); }
   });
-  save(); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
+  save(); recordScore({ts:Date.now(),title:S.quiz.title,score:sc,full:full,ok:okN,no:noN,blank:blank,n:ids.length,mode:S.mode}); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
   const m=document.createElement('div'); m.className='modal';
   m.innerHTML=`<div class="modal-card"><div class="score">${sc}<small> / ${full}</small></div>
     <div class="sub">${esc(S.quiz.title)}</div>
