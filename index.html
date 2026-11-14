@@ -544,6 +544,24 @@ function mergeCloud(remote){
 }
 async function cloudPull(silent){
   if(!cloud.key){ if(!silent) alert('先在「记录 → 云端同步」里设置同步码'); return null; }
+  /* ① 登录了评论账号 → 走评论服务（不需要 GitHub Token） */
+  if(cmtAuthed()){
+    try{
+      if(!CMT.ready && !(await cmtInit())) throw new Error('评论服务不可用');
+      const j=await cmtApi('/api/progress');
+      if(j&&j.data){
+        mergeCloud(j.data);
+        setCloudState('已同步 '+(j.ts?new Date(j.ts*1000).toLocaleString():''));
+        return j.data;
+      }
+      if(!silent) setCloudState('账号里还没有进度，本机保存后会传上去');
+      return null;
+    }catch(e){
+      if(silent) return null;
+      throw new Error('拉取进度失败：'+(e.message||e));
+    }
+  }
+  /* ② 回退：GitHub records/<同步码>.json */
   let data=null;
   if(cloud.token){
     const r=await fetch(cloudApiUrl(),{headers:{Authorization:'Bearer '+cloud.token,Accept:'application/vnd.github+json'},cache:'no-store'});
@@ -563,10 +581,17 @@ async function cloudPull(silent){
 }
 async function cloudPush(){
   if(!cloud.key) throw new Error('先设置同步码');
-  if(!cloud.token) throw new Error('上传需要 GitHub Token（只读拉取不需要）');
   const payload={v:1,key:cloud.key,updated:Date.now(),
     store:{done:store.done,wrong:store.wrong,fav:store.fav,dk:store.dk,mt:store.mt,del:store.del},
     scores:loadScores()};
+  /* ① 登录了评论账号 → 直接传服务端 */
+  if(cmtAuthed()){
+    if(!CMT.ready && !(await cmtInit())) throw new Error('评论服务不可用');
+    await cmtApi('/api/progress',{method:'POST',body:{data:payload}});
+    setCloudState('已上传 '+new Date().toLocaleTimeString());
+    return;
+  }
+  if(!cloud.token) throw new Error('登录评论账号（或填 GitHub Token）后才能上传进度');
   let sha=cloud.sha||'';
   const g=await fetch(cloudApiUrl(),{headers:{Authorization:'Bearer '+cloud.token,Accept:'application/vnd.github+json'},cache:'no-store'});
   if(g.ok){ const j=await g.json(); sha=j.sha||''; }
@@ -583,29 +608,33 @@ async function cloudSync(auto){
   if(_syncBusy) return; _syncBusy=true; setCloudState('同步中…');
   try{
     await cloudPull(true);
-    if(cloud.token) await cloudPush();
-    setCloudState((cloud.token?'✓ 已同步 ':'✓ 已拉取（只读）')+new Date().toLocaleTimeString());
+    try{ await cloudPush(); }catch(e){ if(!auto) throw e; setCloudState('本机已保存，稍后自动重试'); return; }
+    setCloudState('✓ 已同步 '+new Date().toLocaleTimeString());
     renderAll();
   }catch(e){
     setCloudState('✕ '+(e.message||'同步失败'));
     if(!auto) alert('同步失败：'+(e.message||e));
   }finally{ _syncBusy=false; }
 }
-function scheduleSync(){   // 改动落盘后 15s 自动上传（去抖），避免每答一题都打 GitHub
-  if(cloud.hold||!cloud.key||!cloud.token) return;
+function scheduleSync(){   // 改动落盘后 15s 自动上传（去抖），避免每答一题都打网络
+  if(cloud.hold||!cloud.key) return;
+  if(!cloud.token && !cmtAuthed()) return;
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(function(){ cloudSync(true); },15000);
 }
+/* 评论账号登录后就能同步进度（服务端），无需 GitHub Token */
+function cmtAuthed(){ try{ return !!(CMT.user && CMT.user.token); }catch(e){ return false; } }
 /* 评论账号 ⇄ 云端同步码：登录评论账号后，同步码自动用 u-<uid>，不用再手抄 14 位 */
 function cloudUserKey(uid){ return ('u-'+String(uid||'').toLowerCase()).replace(/[^a-z0-9_-]/g,'').slice(0,40); }
 async function cloudBindUser(uid){
   const k=cloudUserKey(uid); if(k.length<7) return;
-  if(cloud.key===k){ scheduleSync(); return; }
+  if(cloud.key===k){ try{ await cloudSync(true); }catch(e){} return; }
   const old=cloud.key;
   if(old && !confirm('把本机记录合并到「评论账号」的同步码？\n\n原同步码 '+old+' 的云端文件不会删除，随时可以切回去。')) return;
   cloud.key=k; saveCloud();
   try{ await cloudPull(true); }catch(e){}
   try{ await cloudPush(); }catch(e){}
+  setCloudState('已绑定账号，进度自动同步');
   try{ renderAll(); }catch(e){}
 }
 
@@ -629,23 +658,24 @@ function cloudSetupToken(){
   alert('Token 已只保存在本机浏览器。注意：别在公用电脑上设置。');
 }
 function cloudBar(){
-  const on=!!cloud.key, tk=!!cloud.token;
-  return '<div class="panel"><div class="panel-h">云端同步 · 多设备'
-    +'<span id="cloudState">'+esc(cloud.state||(on?(tk?'已设置':'只读'):'未设置'))+'</span></div>'
+  const on=!!cloud.key, tk=!!cloud.token, au=cmtAuthed();
+  let nick='';
+  try{ nick=(CMT.user&&CMT.user.nick)||''; }catch(e){}
+  return '<div class="panel"><div class="panel-h">进度同步 · 多设备'
+    +'<span id="cloudState">'+esc(cloud.state||(au?'已登录':(on?(tk?'已设置':'只读'):'未登录')))+'</span></div>'
     +'<div style="padding:11px 14px;font-size:12.5px;line-height:1.85;color:#5b6270">'
-    +'<div>同步码：<b style="font-family:ui-monospace,Consolas,monospace;color:#2c3140">'
-      +(on?esc(cloud.key.slice(0,6)+'…'+cloud.key.slice(-4)):'—')+'</b>'
-      +'　Token：'+(tk?'<b style="color:#12a150">已设置</b>':'未设置')+'</div>'
+    +'<div>账号：'+(au?('<b style="color:#12a150">'+esc(nick)+'</b>　登录即同步'):'<b style="color:#e08a00">未登录</b>（去顶栏 👤 登录）')
+      +'　同步码：<b style="font-family:ui-monospace,Consolas,monospace;color:#2c3140">'
+      +(on?esc(cloud.key.slice(0,6)+'…'+cloud.key.slice(-4)):'—')+'</b></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">'
       +'<button class="btn pri" onclick="cloudSync(false)">立即同步</button>'
-      +'<button class="btn line" onclick="cloudSetupKey()">'+(on?'改同步码':'生成同步码')+'</button>'
-      +'<button class="btn line" onclick="cloudSetupToken()">设置 Token</button>'
-      +'<button class="btn line" onclick="cloudPull(false).then(renderAll).catch(function(e){alert(e.message)})">仅拉取</button>'
+      +'<button class="btn line" onclick="cloudPush().then(function(){setCloudState(\'✓ 已上传 \'+new Date().toLocaleTimeString())}).catch(function(e){alert(e.message)})">立即上传</button>'
+      +'<button class="btn line" onclick="cloudSetupToken()">设置 Token（可选）</button>'
     +'</div>'
     +'<div style="color:#98a0ad;font-size:11.5px;line-height:1.7;margin-top:8px">'
-      +'错题 / 收藏 / 成绩按时间戳合并（新的赢，删除也会同步），换设备填同一同步码即可。'
-      +'文件放在公开仓库的 <code>records/</code> 里，同步码等于文件名的一部分，别用真实姓名。'
-      +'上传要 Token（只授本仓库 Contents 读写），只存本机浏览器。'
+      +'<b>登录刷题账号就自动同步</b>，换设备登同一个账号即可拿到成绩/错题/收藏（不需要 Token）。'
+      +'改了题或交卷后 15 秒自动上传。没网时先存本机，联网自动补。'
+      +'也可填 GitHub Token 把记录存到公开仓库的 <code>records/</code>（旧的备份方式）。'
     +'</div></div></div>';
 }
 /* ================= 移动端抽屉 / 底部导航 ================= */
@@ -1453,8 +1483,8 @@ function globalSearch(kw){
    - 排序：我点赞/收藏的置顶（可 ↑↓） > 全网 赞+收藏−踩 前 3 > 其余按当日种子随机曝光
    - 权限：只能删自己的评论（服务端 403 强制）
    - 列表本地缓存：先显示上次看到的，再后台刷新（服务没开也不会空白） */
-const LS_CMT='cd27_cmt_v1', LS_CMTC='cd27_cmtc_v1', LS_CMTQ='cd27_cmtq_v1';
-const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null, draft:'', loading:false, q:[] };
+const LS_CMT='cd27_cmt_v1', LS_CMTC='cd27_cmtc_v1', LS_CMTQ='cd27_cmtq_v1', LS_CMTO='cd27_cmtops_v1';
+const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null, draft:'', loading:false, q:[], ops:[] };
 let _cmtCache={};
 
 function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null'); if(u&&u.token) CMT.user=u;}catch(e){} }
@@ -1475,6 +1505,38 @@ function cmtQueueAdd(it){ CMT.q=CMT.q||[]; CMT.q.push(it); cmtQueueSave(); }
 function cmtQueueDel(id){ CMT.q=(CMT.q||[]).filter(function(x){return x.id!==id}); cmtQueueSave(); }
 function cmtPending(tid){ return (CMT.q||[]).filter(function(x){return x.tid===tid}); }
 function cmtQueueCount(){ return (CMT.q||[]).length; }
+
+/* ---- 操作队列：点赞/收藏/置顶/删评论 断网时先在本地生效，联网后补同步 ---- */
+function cmtOpsLoad(){ try{CMT.ops=JSON.parse(localStorage.getItem(LS_CMTO)||'[]'); if(!Array.isArray(CMT.ops)) CMT.ops=[];}catch(e){CMT.ops=[];} }
+function cmtOpsSave(){ try{localStorage.setItem(LS_CMTO,JSON.stringify(CMT.ops||[]))}catch(e){} }
+function cmtOpsCount(){ return (CMT.ops||[]).length; }
+function cmtOpsAdd(op){
+  CMT.ops=CMT.ops||[];
+  // 同一目标只留最后一次：react(cid+kind) / pin(tid) / del(cid)
+  if(op.type==='react') CMT.ops=CMT.ops.filter(function(x){return !(x.type==='react'&&x.cid===op.cid&&x.kind===op.kind)});
+  if(op.type==='pin')   CMT.ops=CMT.ops.filter(function(x){return !(x.type==='pin'&&x.tid===op.tid)});
+  if(op.type==='del')   CMT.ops=CMT.ops.filter(function(x){return !(x.type==='del'&&x.cid===op.cid)});
+  CMT.ops.push(op); cmtOpsSave();
+}
+function cmtIsOn(kind,cid){ const me=CMT.me||{}; return ((me[kind]||[])).indexOf(cid)>=0; }
+/* 本地乐观更新：按钮高亮 + 计数，不依赖服务端 */
+function cmtApplyLocal(kind,cid,on){
+  CMT.me=CMT.me||{like:[],dislike:[],star:[],pin:[]};
+  ['like','dislike','star'].forEach(function(k){ if(!Array.isArray(CMT.me[k])) CMT.me[k]=[]; });
+  const had=CMT.me[kind].indexOf(cid)>=0;
+  if(on){ if(!had) CMT.me[kind].push(cid);
+    if(kind==='like'||kind==='dislike'){
+      const op=kind==='like'?'dislike':'like';
+      const i=CMT.me[op].indexOf(cid); if(i>=0) CMT.me[op].splice(i,1);
+    }
+  }else{ CMT.me[kind]=CMT.me[kind].filter(function(x){return x!==cid}); }
+  const c=(CMT.list||[]).filter(function(x){return x.id===cid})[0];
+  if(c){
+    const key=kind==='like'?'likes':(kind==='dislike'?'dislikes':'stars');
+    if(on&&!had) c[key]=(Number(c[key])||0)+1;
+    if(!on&&had) c[key]=Math.max(0,(Number(c[key])||0)-1);
+  }
+}
 
 function cmtUrl(p){ return CMT.base+p; }
 async function cmtInit(){
@@ -1545,8 +1607,9 @@ async function cmtRefresh(manual){
     cmtRender();
   }catch(e){
     CMT.ready=false;   // 下回重新读 api.json，拿最新的隧道地址
-    setCmtState('评论服务暂时连不上，点「刷新」重试');
-    if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论会先存在本机，恢复后自动补发。');
+    // 静默：有缓存就继续显示缓存，不打扰刷题
+    setCmtState((CMT.list&&CMT.list.length)?'':'');
+    if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论/点赞会先存在本机，恢复后自动同步。');
   }finally{ CMT.loading=false; }
 }
 
@@ -1645,13 +1708,33 @@ function cmtDelPending(id){ cmtQueueDel(id); cmtRender(); setCmtState('已删除
 
 async function cmtReact(cid,kind){
   if(!CMT.user){ setCmtState('先登录再点赞'); return; }
-  try{ await cmtApi('/api/r',{method:'POST',body:{cid:cid,kind:kind}}); await cmtRefresh(false); }
-  catch(e){ setCmtState(e.message); }
+  const on=!cmtIsOn(kind,cid);
+  cmtApplyLocal(kind,cid,on); cmtRender();      // 先本地生效，不等服务端
+  try{
+    await cmtApi('/api/r',{method:'POST',body:{cid:cid,kind:kind,act:on?'on':'off'}});
+  }catch(e){
+    if(cmtOfflineErr(e)){
+      cmtOpsAdd({type:'react',cid:cid,kind:kind,act:on?'on':'off',ts:Date.now()});
+      setCmtState('已存在本机，联网后自动同步');
+      cmtScheduleFlush();
+    }else{
+      cmtApplyLocal(kind,cid,!on); cmtRender();   // 服务端拒绝 → 回滚
+      setCmtState(e.message);
+    }
+  }
 }
 async function cmtDel(cid){
   if(!confirm('删除这条评论？')) return;
+  const i=(CMT.list||[]).findIndex(function(x){return x.id===cid});
   try{ await cmtApi('/api/c/'+cid,{method:'DELETE'}); await cmtRefresh(false); }
-  catch(e){ alert(e.message); }
+  catch(e){
+    if(cmtOfflineErr(e)){
+      if(i>=0){ CMT.list.splice(i,1); cmtRender(); }
+      cmtOpsAdd({type:'del',cid:cid,ts:Date.now()});
+      setCmtState('已删除，联网后同步');
+      cmtScheduleFlush();
+    }else alert(e.message);
+  }
 }
 function cmtReply(cid){
   CMT.replyTo=cid; cmtRender();
@@ -1669,7 +1752,14 @@ async function cmtPinMove(cid,dir){
   const t=cur[i]; cur[i]=cur[j]; cur[j]=t;
   try{ await cmtApi('/api/pin',{method:'POST',body:{tid:CMT.tid,order:cur}});
     if(CMT.me) CMT.me.pin=cur; cmtRender(); }
-  catch(e){ alert(e.message); }
+  catch(e){
+    if(cmtOfflineErr(e)){
+      if(CMT.me) CMT.me.pin=cur; cmtRender();
+      cmtOpsAdd({type:'pin',tid:CMT.tid,order:cur,ts:Date.now()});
+      setCmtState('已存在本机，联网后自动同步');
+      cmtScheduleFlush();
+    }else alert(e.message);
+  }
 }
 function cmtOfflineErr(e){
   // HTTP 4xx（除 404=隧道地址失效）算“服务端明确拒绝”，其余都当离线（留着等补发）
@@ -1704,9 +1794,10 @@ async function cmtSend(){
 /* ---- 补发队列 ---- */
 let _flushing=false, _flushTimer=null;
 async function cmtFlushQueue(silent){
-  if(_flushing || !(CMT.q||[]).length) return 0;
+  const nq=(CMT.q||[]).length, no=(CMT.ops||[]).length;
+  if(_flushing || (!nq && !no)) return 0;
   if(!CMT.user || !CMT.user.token) return 0;      // 没登录不能代发
-  _flushing=true; let n=0;
+  _flushing=true; let n=0, m=0;
   try{
     if(!CMT.ready && !(await cmtInit())) return 0;
     const arr=(CMT.q||[]).slice();
@@ -1716,25 +1807,41 @@ async function cmtFlushQueue(silent){
         await cmtApi('/api/c',{method:'POST',body:{tid:it.tid,text:it.text,reply_to:it.reply_to||null}});
         cmtQueueDel(it.id); n++;
       }catch(e){
-        const m=/HTTP (\d+)/.exec(e&&e.message||'');
-        if(m && (+m[1]===400 || +m[1]===409)){ cmtQueueDel(it.id); }   // 内容非法，丢弃这条
-        else break;                                                    // 离线/未登录，下次再试
+        const mm=/HTTP (\d+)/.exec(e&&e.message||'');
+        if(mm && (+mm[1]===400 || +mm[1]===409)){ cmtQueueDel(it.id); }   // 内容非法，丢弃这条
+        else break;                                                        // 离线/未登录，下次再试
+      }
+    }
+    /* 点赞/收藏/置顶/删评论：按顺序补同步 */
+    const ops=(CMT.ops||[]).slice();
+    for(let i=0;i<ops.length;i++){
+      const op=ops[i];
+      try{
+        if(op.type==='react') await cmtApi('/api/r',{method:'POST',body:{cid:op.cid,kind:op.kind,act:op.act}});
+        else if(op.type==='pin') await cmtApi('/api/pin',{method:'POST',body:{tid:op.tid,order:op.order}});
+        else if(op.type==='del') await cmtApi('/api/c/'+op.cid,{method:'DELETE'});
+        CMT.ops=(CMT.ops||[]).filter(function(x){return x!==op}); cmtOpsSave(); m++;
+      }catch(e){
+        const mm=/HTTP (\d+)/.exec(e&&e.message||'');
+        if(mm && (+mm[1]===400 || +mm[1]===404 || +mm[1]===409)){      // 目标没了/非法 → 丢掉
+          CMT.ops=(CMT.ops||[]).filter(function(x){return x!==op}); cmtOpsSave();
+        }else break;
       }
     }
   }finally{ _flushing=false; }
-  if(n){
-    setCmtState('已补发 '+n+' 条');
-    if(CMT.tid) await cmtRefresh(false);
-    if(!silent) alert('已补发 '+n+' 条待发评论');
+  if(n||m){
+    setCmtState('已补发 '+(n+m)+' 项'+((n&&m)?('（评论 '+n+' / 操作 '+m+'）'):''));
+    if(n&&CMT.tid) await cmtRefresh(false);
+    if(!silent) alert('已补发 '+(n+m)+' 项待同步内容');
   }
-  return n;
+  return n+m;
 }
 function cmtScheduleFlush(){
   clearTimeout(_flushTimer);
   _flushTimer=setTimeout(function(){ cmtFlushQueue(true); },6000);
 }
-setInterval(function(){ if(cmtQueueCount()) cmtFlushQueue(true); },60000);
-window.addEventListener('online', function(){ if(cmtQueueCount()) cmtFlushQueue(true); });
+setInterval(function(){ if(cmtQueueCount()||cmtOpsCount()) cmtFlushQueue(true); },60000);
+window.addEventListener('online', function(){ if(cmtQueueCount()||cmtOpsCount()) cmtFlushQueue(true); });
 async function cmtAuth(kind){
   const nickEl=document.getElementById('cmtNick'), passEl=document.getElementById('cmtPass');
   const nick=(nickEl&&nickEl.value||'').trim(), pass=(passEl&&passEl.value||'');
@@ -1832,7 +1939,7 @@ async function ucSaveNick(){
   }catch(e){ alert(e.message); }
 }
 /* 评论模块在 boot 之后，所以登录态/缓存在这里初始化（boot 里调用会撞 TDZ） */
-cmtLoadUser(); cmtCacheLoad(); cmtQueueLoad();
+cmtLoadUser(); cmtCacheLoad(); cmtQueueLoad(); cmtOpsLoad();
 
 async function ucSavePass(){
   if(!CMT.user) return;
