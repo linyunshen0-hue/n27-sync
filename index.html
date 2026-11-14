@@ -1875,12 +1875,44 @@ async function localApi(path, opt){
 }
 
 /* ---- ③ Supabase 底层：Auth 请求（不带 Bearer）、REST 请求（带 Bearer + 401 自动刷新） ---- */
+/* 带超时的 fetch：Supabase 域名在部分网络（手机 4G/弱网/被干扰）下会长时间挂起，
+   不自己掘断就会一直“加载中”≈用户看到的“连不上”。 */
+async function supaFetch(url, opt, ms){
+  ms = ms || 8000;
+  if (typeof AbortController === 'undefined') return fetch(url, opt);
+  const c = new AbortController();
+  const t = setTimeout(function(){ try{ c.abort(); }catch(e){} }, ms);
+  const o = Object.assign({}, opt || {}, { signal: c.signal });
+  try { return await fetch(url, o); }
+  catch(e){
+    if (e && e.name === 'AbortError') throw new Error('请求超时 ' + Math.round(ms/1000) + ' 秒');
+    throw new Error((e && e.message) || '网络错误');
+  }
+  finally { clearTimeout(t); }
+}
+
+/* 手动诊断：Console 里跑 cmtDiag() 就能看到当前走哪条通道、哪一步失败 */
+async function cmtDiag(){
+  const r = { supa: SUPA.url, pages: location.href };
+  const t0 = Date.now();
+  r.ping = await supaPing(); r.pingMs = Date.now() - t0;
+  r.init = await cmtInit();
+  r.mode = CMT.mode; r.addrSrc = CMT.addrSrc; r.base = CMT.base;
+  r.user = CMT.user ? ('登录中 ' + String(CMT.user.nick || '')) : '未登录';
+  if (r.init && CMT.tid) {
+    try { const j = await cmtApi('/api/c/' + encodeURIComponent(CMT.tid)); r.list = (j && j.list ? j.list.length : 0) + ' 条'; }
+    catch(e){ r.listErr = e.message; }
+  }
+  console.log('cmtDiag', r);
+  return r;
+}
+
 async function supaAuth(path, body){
-  const r = await fetch(SUPA.url + '/auth/v1' + path, {
+  const r = await supaFetch(SUPA.url + '/auth/v1' + path, {
     method: 'POST',
     headers: { apikey: SUPA.key, 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {}), cache: 'no-store'
-  });
+  }, 12000);
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) {
     // GoTrue 的报错字段五花八门，统一翻成人话
@@ -1909,9 +1941,9 @@ async function supaRefresh(){
 async function supaRpc(fn, args, retried){
   const h = { 'Content-Type': 'application/json', apikey: SUPA.key };
   if (CMT.user && CMT.user.token) h.Authorization = 'Bearer ' + CMT.user.token;
-  const r = await fetch(SUPA.url + '/rest/v1/rpc/' + fn, {
+  const r = await supaFetch(SUPA.url + '/rest/v1/rpc/' + fn, {
     method: 'POST', headers: h, body: JSON.stringify(args || {}), cache: 'no-store'
-  });
+  }, 8000);
   let j = {}; try { j = await r.json(); } catch (e) {}
   // access token 默认 1 小时过期 → 401 时用 refresh_token 续一次再重试
   if (r.status === 401 && !retried && await supaRefresh()) return supaRpc(fn, args, true);
@@ -1921,11 +1953,11 @@ async function supaRpc(fn, args, retried){
 
 async function supaPing(){
   try {
-    const r = await fetch(SUPA.url + '/rest/v1/rpc/health', {
+    const r = await supaFetch(SUPA.url + '/rest/v1/rpc/health', {
       method: 'POST', cache: 'no-store',
       headers: { apikey: SUPA.key, Authorization: 'Bearer ' + SUPA.key, 'Content-Type': 'application/json' },
       body: '{}'
-    });
+    }, 5000);
     return r.ok;
   } catch (e) { return false; }
 }
@@ -2007,11 +2039,11 @@ async function cmtApi(path, opt){
   }
   if (path === '/api/pass') {
     const u = CMT.user; if (!u || !u.token) throw new Error('请先登录');
-    const r = await fetch(SUPA.url + '/auth/v1/user', {
+    const r = await supaFetch(SUPA.url + '/auth/v1/user', {
       method: 'PUT',
       headers: { apikey: SUPA.key, Authorization: 'Bearer ' + u.token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: String(b.new || '') }), cache: 'no-store'
-    });
+    }, 12000);
     let e = {}; try { e = await r.json(); } catch (x) {}
     if (!r.ok) throw new Error(e.msg || e.message || '改密码失败（新密码至少 6 位）');
     return { ok: true, token: u.token, uid: u.uid, nick: u.nick };
@@ -2094,7 +2126,7 @@ async function cmtRefresh(manual){
   CMT.loading=true; setCmtState('加载中…');
   try{
     if(!CMT.ready && !(await cmtInit())){
-      setCmtState('评论服务离线'+(CMT.list.length?'（显示上次缓存）':''));
+      setCmtState('评论连不上（Supabase 与隧道都不可达）'+(CMT.list.length?'，显示上次缓存':''));
       CMT.loading=false; return;
     }
     const j=await cmtApi('/api/c/'+encodeURIComponent(CMT.tid));
@@ -2110,7 +2142,8 @@ async function cmtRefresh(manual){
       // 静默：有缓存就继续显示缓存，不打扰刷题
       setCmtState((CMT.list&&CMT.list.length)?'':'');
     }
-    if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论/点赞会先存在本机，恢复后自动同步。');
+    if (manual) alert('连不上评论服务（'+e.message+'）\n当前通道：'+(CMT.mode||'未建立')+'（'+(CMT.addrSrc||'-')+'）'
+      +'\n\n可能是网络到 Supabase 不通。在 Console 跑 cmtDiag() 能看具体哪一步失败。\n你发的评论/点赞会先存在本机，恢复后自动同步。');
     // 隧道地址可能刚漂移：3 秒后自动重解析并重试一次
     if(!manual && !CMT._retry){
       CMT._retry=setTimeout(function(){ CMT._retry=null; if(!CMT.loading) cmtRefresh(false); },3000);
