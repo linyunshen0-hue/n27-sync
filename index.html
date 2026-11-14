@@ -1579,7 +1579,24 @@ function cmtMount(tid){
     +'<div class="cmt-list" id="cmtList"></div><div class="cmt-ft" id="cmtFt"></div>';
   cmtRender();
   const c=_cmtCache[tid];
-  if(!c || Date.now()-(c.ts||0) > 5*60000) cmtRefresh(false);
+  cmtMaybeRefresh(tid);
+}
+/* 缓存永不主动失效：先秒出上次内容，再后台静默拉新（60 秒节流，失败不提示） */
+let _cmtTryTs=0;
+function cmtMaybeRefresh(tid){
+  const c=_cmtCache[tid];
+  if(c && (Date.now()-(c.ts||0) < 60000)) return;
+  if(Date.now()-_cmtTryTs < 60000) return;
+  _cmtTryTs=Date.now();
+  try{ cmtRefresh(false); }catch(e){}
+}
+function cmtAgo(ts){
+  if(!ts) return '';
+  const m=Math.floor(Math.max(0,Date.now()-ts)/60000);
+  if(m<1) return '刚刚';
+  if(m<60) return m+' 分钟前';
+  const h=Math.floor(m/60); if(h<24) return h+' 小时前';
+  return Math.floor(h/24)+' 天前';
 }
 function cmtGoto(){
   const b=document.getElementById('cmtBox'); if(!b) return;
@@ -1607,8 +1624,12 @@ async function cmtRefresh(manual){
     cmtRender();
   }catch(e){
     CMT.ready=false;   // 下回重新读 api.json，拿最新的隧道地址
-    // 静默：有缓存就继续显示缓存，不打扰刷题
-    setCmtState((CMT.list&&CMT.list.length)?'':'');
+    if(/401|请先登录/.test(e&&e.message||'')){
+      setCmtState('登录已过期，点右上角 👤 重新登录');   // 不清登录态、不清缓存
+    }else{
+      // 静默：有缓存就继续显示缓存，不打扰刷题
+      setCmtState((CMT.list&&CMT.list.length)?'':'');
+    }
     if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论/点赞会先存在本机，恢复后自动同步。');
   }finally{ CMT.loading=false; }
 }
@@ -1624,7 +1645,12 @@ function cmtRender(){
   if(!list||!ft) return;
   const old=document.getElementById('cmtText'); if(old) CMT.draft=old.value;
   const me=CMT.me||{like:[],dislike:[],star:[],pin:[]};
-  if(nEl) nEl.textContent=CMT.list.length?(' · '+CMT.list.length+' 条'):'';
+  if(nEl){
+    let t=CMT.list.length?(' · '+CMT.list.length+' 条'):'';
+    const c=_cmtCache[CMT.tid];
+    if(c&&c.ts&&(Date.now()-c.ts)>3600000) t+=' · 更新于 '+cmtAgo(c.ts);
+    nEl.textContent=t;
+  }
   const chunk=function(title,arr,zone){
     if(!arr.length) return '';
     let h='<div class="cs-sec">'+title+'</div>';
