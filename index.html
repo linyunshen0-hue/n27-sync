@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>冲刺模考 · 工作台</title>
 <style>
+html,body{max-width:100%;overflow-x:hidden}
 :root{
   --bg:#f2f4f7; --card:#fff; --line:#e6e9ee; --text:#1b1f26; --muted:#8b93a1;
   --pri:#0866ff; --pri-soft:#eaf1ff; --ok:#0fa968; --ok-soft:#e9f9f1;
@@ -358,9 +359,9 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 
   /* 工具栏：图标化 + 等宽一行 */
   .tools{padding:6px 8px calc(6px + env(safe-area-inset-bottom));z-index:40}
-  .tools-inner{gap:5px;max-width:none;flex-wrap:nowrap}
-  .tools-inner .btn{flex:1 1 0;min-width:0;height:42px;padding:0 4px;font-size:12px;
-    justify-content:center;white-space:nowrap;overflow:hidden;border-radius:9px}
+  .tools-inner{gap:4px;max-width:none;flex-wrap:nowrap;overflow:hidden}
+  .tools-inner .btn{flex:1 1 0;min-width:0;height:44px;padding:0 2px;font-size:11.5px;line-height:1.12;
+    justify-content:center;white-space:normal;word-break:keep-all;overflow:hidden;border-radius:9px;flex-direction:column;gap:2px}
   .tools-inner .btn kbd{display:none}
   .tools-inner .grow,.tools-inner .pos{display:none}
   .tools-inner .btn .ic{font-size:15px;line-height:1}
@@ -416,6 +417,69 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 .wrow .n{flex:0 0 22px;color:#b3bac5;font-size:11px;text-align:right}
 .homegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}
 @media (max-width:700px){.homegrid{grid-template-columns:repeat(2,1fr)}}
+/* ===== 苍盾风格答题页（第10条） ===== */
+:root{--cd-grad:linear-gradient(135deg,#33b5e6 0%,#1cc8b4 100%);}
+/* 卷头：绿竖条卷名 + 青蓝序号 */
+.main-head .where b{color:#0b9e86;font-weight:700;position:relative;padding-left:9px}
+.main-head .where b::before{content:'';position:absolute;left:0;top:50%;margin-top:-7px;width:3px;height:14px;border-radius:2px;background:#14b98f}
+.pbar{height:4px;border-radius:2px;background:#e9edf2}
+.pbar i{background:var(--cd-grad)}
+.q-num{font-size:12.5px;color:#9aa3af;min-width:52px;text-align:right;white-space:nowrap}
+.q-num b{font-size:16px;color:#0aa6c8;font-weight:700;margin-right:2px}
+/* 题型：蓝色方括号 */
+.qtype{font-size:13px;font-weight:700;color:#2b7fd4;letter-spacing:.3px}
+/* 题干 */
+.q-title{font-size:16.5px;line-height:1.9;color:#24292f;font-weight:400}
+/* 考点条 */
+.cd-kd{display:flex;align-items:center;gap:6px;background:#f3f5f8;border-radius:8px;padding:9px 12px;font-size:13px;color:#5b6270;margin:0 0 14px;cursor:pointer;line-height:1.5}
+.cd-kd:hover{background:#eef1f6}
+.cd-kd .ar{margin-left:auto;color:#b6bdc8;flex:0 0 auto}
+.cd-kd.static{cursor:default;opacity:.8}
+/* 选项：白卡 + A. 前缀；选中/答对/答错整行渐变 */
+.opts{gap:8px}
+.opt{padding:13px 14px;border:1px solid #e5e7ec;border-radius:6px;background:#fff;gap:2px;transition:background .12s,border-color .12s}
+.opt:hover{background:#fafbfc;border-color:#d2d8e0}
+.opt .k{flex:0 0 auto;height:auto;border:0;border-radius:0;background:none;color:#3d4450;font-size:15px;font-weight:600;margin-top:0;display:inline;line-height:1.6}
+.opt .k::after{content:'.'}
+.opt .v{font-size:15px;line-height:1.6;color:#24292f;font-weight:500}
+.opt .o-nbtn{opacity:.3}
+.opt.sel{background:var(--cd-grad);border-color:transparent;box-shadow:0 3px 10px rgba(28,200,180,.26)}
+.opt.sel .k,.opt.sel .v{color:#fff}
+.opt.sel .o-nbtn{opacity:.55;color:#fff}
+.opt.ok{background:linear-gradient(135deg,#2fbe86 0%,#17b884 100%);border-color:transparent}
+.opt.ok .k,.opt.ok .v{color:#fff}
+.opt.ok .o-nbtn{color:#fff;opacity:.55}
+.opt.no{background:linear-gradient(135deg,#fb7066 0%,#e5484d 100%);border-color:transparent}
+.opt.no .k,.opt.no .v{color:#fff}
+.opt.no .o-nbtn{color:#fff;opacity:.55}
+/* 确认选项：全宽大按钮，未选灰 / 已选渐变 */
+.q-act{flex-direction:column;align-items:stretch;gap:9px}
+.q-act .cd-sub{display:flex;align-items:center;justify-content:center;height:46px;border-radius:6px;font-size:15.5px;font-weight:600;background:#eceef1;color:#9aa3af;border:0;width:100%;cursor:not-allowed;transition:.15s;padding:0}
+.q-act .cd-sub.on{background:var(--cd-grad);color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(28,200,180,.28)}
+.q-act .cd-sub .kbd-hint{margin-left:9px;font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.55);border-radius:4px;padding:1px 5px;font-weight:400}
+.q-act .cd-sub:not(.on) .kbd-hint{border-color:rgba(0,0,0,.14)}
+.q-act-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+/* 答案条 */
+.cd-ansbar{display:flex;align-items:center;gap:18px;background:#fff;border:1px solid #e9ecf1;border-radius:8px;padding:11px 13px;margin:13px 0 0;flex-wrap:wrap}
+.cd-ab{display:flex;align-items:baseline;gap:6px}
+.cd-ab .lb{font-size:12.5px;color:#8b93a1}
+.cd-ab b{font-size:15px;font-weight:700}
+.cd-ab b.ok{color:#12a86e}.cd-ab b.no{color:#e5484d}
+.cd-addwrong{margin-left:auto;font-size:12.5px;color:#12a86e;background:rgba(28,200,180,.12);border:0;border-radius:999px;padding:7px 14px;cursor:pointer}
+.cd-addwrong:hover{background:rgba(28,200,180,.2)}
+/* 解析 tab + 正确率胶囊 */
+.cd-dtabs{display:flex;align-items:stretch;border-bottom:1px solid var(--line);margin:0 0 12px}
+.cd-dtabs span{flex:1;text-align:center;font-size:13.5px;color:#7b8494;padding:10px 0 9px;cursor:pointer;position:relative}
+.cd-dtabs span.on{color:#12a86e;font-weight:700}
+.cd-dtabs span.on::after{content:'';position:absolute;left:50%;bottom:-1px;margin-left:-11px;width:22px;height:3px;border-radius:2px;background:#12a86e}
+.cd-rate{margin-left:8px;font-size:12px;font-weight:600;color:#12a86e;background:rgba(28,200,180,.1);border:1px solid rgba(28,200,180,.32);border-radius:999px;padding:3px 10px;vertical-align:middle}
+@media (max-width:700px){
+  .q-title{font-size:15.5px;line-height:1.85}
+  .opt{padding:11px 12px;border-radius:6px}
+  .opt .v{font-size:14.6px}
+  .q-act .cd-sub{height:44px;font-size:15px}
+  .cd-ansbar{gap:14px;padding:10px 12px}
+}
 </style>
 </head>
 <body>
@@ -432,7 +496,7 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
   <button class="mobmenu" id="ucbtn" onclick="ucOpen()" aria-label="我的" style="display:flex;margin-left:auto" title="我的 / 建议">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.4-6.2 7.5-6.2s7.5 2.2 7.5 6.2"/></svg></button>
   <div class="seg" id="modeseg">
-    <button data-m="practice" class="on" onclick="setMode('practice')" title="练习：选好选项 → 点「提交本题」才判对错">练习</button>
+    <button data-m="practice" class="on" onclick="setMode('practice')" title="练习：选好选项 → 点「确认选项」才判对错">练习</button>
     <button data-m="exam" onclick="setMode('exam')" title="考试：选了不判，交卷后统一统分">考试</button>
   </div>
   <div class="hstat" id="hstat"></div>
@@ -1341,22 +1405,23 @@ function renderMain(){
       <span class="kdlink" onclick="sameGo('${tid}')">同考点还有 ${rel.length} 题 ›</span>`:''}</div>
     <div class="pbar"><i style="width:${(i+1)/ids.length*100}%"></i></div>
     <div class="qstat" title="本卷已答 ${_ansN} 题，已判定答对 ${_okN} 题">已答 ${_ansN}/${ids.length} · 正确率 ${_rate}%</div>
-    <div style="font-size:12px;color:var(--muted);min-width:56px;text-align:right">${i+1} / ${ids.length}</div>`;
+    <div class="q-num"><b>${i+1}</b>/${ids.length}</div>`;
 
   const keys=Object.keys(q.xuanxiang||{}).sort();
   const stemNote=isMob()?'':noteText(tid);   // 手机上不显示题干笔记（挤版面，选项笔记保留）
 
   let h=`<div class="qcard"><div class="q-meta">
-      <span class="tag">${q.type==='多选'?'多选':'单选'}</span>
-      ${q.kaodian?`<span class="kdlink" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">${esc(q.kaodian)}</span>`:'<span class="tag gray">未标注考点</span>'}
+      <span class="qtype">[${q.type==='多选'?'多选题':'单选题'}]</span>
+      <span style="font-size:13px;font-weight:600;color:#3d4450">${i+1}.</span>
       <span class="spacer" style="flex:1"></span>
       <span class="cmtlink" onclick="cmtGoto()">💬 评论</span>
       <span class="favbtn ${store.fav[tid]?'on':''}" onclick="toggleFav('${tid}')" title="${store.fav[tid]?'取消收藏':'收藏'}">${store.fav[tid]?'★':'☆'}</span>
     </div>
-    ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「提交本题」</div>':''}
+    ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「确认选项」</div>':''}
     <div class="q-title">${esc(q.title)}
       ${isMob()?'':`<span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>`}
     </div>
+    ${q.kaodian?`<div class="cd-kd" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">🔖 ${esc(q.kaodian)}<span class="ar">›</span></div>`:`<div class="cd-kd static">🔖 未标注考点</div>`}
     ${stemNote?`<div style="background:var(--note-soft);border-left:3px solid var(--note);border-radius:7px;padding:8px 11px;margin:-6px 0 14px;font-size:13px;line-height:1.65;color:#4b3a7a;white-space:pre-wrap">${esc(stemNote)}</div>`:''}
     <div class="opts">`;
   keys.forEach(k=>{
@@ -1374,15 +1439,22 @@ function renderMain(){
   h+='</div>';
   if(S.mode==='practice' && !S.submitted){
     if(!revealed){
-      h+=`<div class="q-act"><button class="btn pri q-sub" onclick="submitOne()">提交本题<span class="kbd-hint">Enter</span></button>`
+      const _rdy=ans.length>0;
+      h+=`<div class="q-act"><button class="cd-sub${_rdy?' on':''}" ${_rdy?'':'disabled'} onclick="submitOne()">确认选项<span class="kbd-hint">Enter</span></button>`
+        +`<div class="q-act-row">`
         +(q.type==='多选'?'<span class="q-act-tip">多选：全部选项选好再提交</span>':'')
-        +(ans.length?'':'<span class="q-act-tip">先选一个选项</span>')+`</div>`;
+        +(_rdy?'':'<span class="q-act-tip">先选一个选项</span>')+`</div></div>`;
     }else{
       const _ok=isRight(q,ans), _jd=!!(S.judged&&S.judged[tid]);
       const _ca=Array.isArray(q.answer)?q.answer.join(''):String(q.answer==null?'':q.answer);
-      h+=`<div class="q-act"><span class="q-act-ok${_ok?'':' no'}">${_jd?(_ok?'✓ 已提交 · 答对':'✗ 已提交 · 答错'):'👀 已看解析（未计入错题）'}</span>`
-        +`<button class="btn line" onclick="clearAnswer()" style="height:34px">重新作答</button>`
-        +`<span class="q-act-tip">正确答案：${esc(_ca)}</span></div>`;
+      const _my=ans.join('')||'—';
+      h+=`<div class="cd-ansbar">`
+        +`<div class="cd-ab"><span class="lb">正确答案</span><b class="ok">${esc(_ca)}</b></div>`
+        +`<div class="cd-ab"><span class="lb">你的答案</span><b class="${_ok?'ok':'no'}">${esc(_my)}</b></div>`
+        +(!store.wrong[tid]?`<button class="cd-addwrong" onclick="hitWrong('${tid}');renderAll()">+ 加入错题</button>`:'')
+        +`</div>`
+        +`<div class="q-act q-act-row" style="border-top:0;padding-top:10px"><span class="q-act-ok${_ok?'':' no'}">${_jd?(_ok?'✓ 已提交 · 答对':'✗ 已提交 · 答错'):'👀 已看解析（未计入错题）'}</span>`
+        +`<button class="btn line" onclick="clearAnswer()" style="height:34px">重新作答</button></div>`;
     }
   }
   if(S.submitted){
@@ -1402,12 +1474,12 @@ function renderMain(){
   tools.style.display='flex';
   tools.innerHTML = isMob()
     ? `<div class="tools-inner">
-    <button class="btn line" onclick="openSheet()">答题卡</button>
-    <button class="btn" onclick="prev()" ${i===0?'disabled':''}>上一题</button>
-    <button class="btn" onclick="next()" ${i===ids.length-1?'disabled':''}>下一题</button>
-    <button class="btn danger" onclick="dontKnow()">不会</button>
-    <button class="btn" onclick="resetQuiz()">重做</button>
-    <button class="btn pri" onclick="submit()">交卷</button></div>`
+    <button class="btn line" onclick="openSheet()"><span class="ic">🗂</span>答题卡</button>
+    <button class="btn" onclick="prev()" ${i===0?'disabled':''}><span class="ic">←</span>上题</button>
+    <button class="btn" onclick="next()" ${i===ids.length-1?'disabled':''}><span class="ic">→</span>下题</button>
+    <button class="btn danger" onclick="dontKnow()"><span class="ic">😵</span>不会</button>
+    <button class="btn" onclick="resetQuiz()"><span class="ic">↻</span>重做</button>
+    <button class="btn pri" onclick="submit()"><span class="ic">✓</span>交卷</button></div>`
     : `<div class="tools-inner">
     <button class="btn line" onclick="openSheet()">答题卡 ${Object.keys(S.answers).length}/${ids.length}</button>
     <button class="btn" onclick="prev()" ${i===0?'disabled':''}>← 上一题</button>
@@ -1558,17 +1630,19 @@ function renderDetail(){
   const revealed = !!S.revealed[tid] || S.submitted;
   if(!revealed){
     hd.textContent='';
-    const tip=`${S.mode==='exam'?'考试模式：交卷后显示':'选好选项后点「提交本题」显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示（不计分）</span>`;
+    const tip=`${S.mode==='exam'?'考试模式：交卷后显示':'选好选项后点「确认选项」显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示（不计分）</span>`;
     if(mob) setMobDetail(`<div class="empty-detail" style="height:auto;padding:4px 0">${tip}</div>`);
     else el.innerHTML=`<div class="empty-detail">${tip}</div>`;
     return;
   }
   const right=isRight(q,ans);
   const hdHtml=`<span class="tag ${right?'g':'r'}">${right?'✓ 正确':'✗ 错误'}</span>`;
-  let h=`<div class="d-sec"><div class="ans-row">
+  let h=`<div class="cd-dtabs"><span class="on">答案解析</span><span onclick="var b=document.querySelector('.q-title .nbtn');if(b)b.click()">笔记</span><span onclick="cmtGoto()">问答</span></div>`;
+  h+=`<div class="d-sec"><div class="ans-row">
       <div class="ans-box ok"><div class="lbl">正确答案</div><div class="val">${esc(q.answer)}</div></div>
       <div class="ans-box ${right?'ok':'no'}"><div class="lbl">你的答案</div><div class="val">${ans.join('')||'—'}</div></div></div></div>`;
-  h+=`<div class="d-sec"><h4>解析</h4><div class="ex-text">${esc(q.jiexi||'暂无解析')}</div></div>`;
+  const _qr=tidRate(tid);
+  h+=`<div class="d-sec"><h4>解析${_qr?`<span class="cd-rate">正确率 ${_qr.pct}%</span>`:''}</h4><div class="ex-text">${esc(q.jiexi||'暂无解析')}</div></div>`;
   const ms=DB.mantras[tid];
   if(ms&&ms.length){
     h+=`<div class="d-sec"><h4>口诀 / 辨析 <span style="color:#c2c8d2;font-weight:500">${ms.length}</span></h4>`;
