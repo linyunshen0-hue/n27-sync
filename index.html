@@ -1662,37 +1662,54 @@ async function supaRpc(fn, args, retried){
   return j;
 }
 
-/* ---- ④ 新版 cmtInit：同源 → 隧道（复用页面的 cmtResolveBase）→ Supabase ---- */
+async function supaPing(){
+  try {
+    const r = await fetch(SUPA.url + '/rest/v1/rpc/health', {
+      method: 'POST', cache: 'no-store',
+      headers: { apikey: SUPA.key, Authorization: 'Bearer ' + SUPA.key, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
+/* ---- ④ 新版 cmtInit：同源（局域网）→ Supabase（云端）→ 隧道（兜底） ----
+   顺序说明：把 Supabase 放在隧道前面，是为了让“电脑关机”时手机 4G 打开页面
+   秒进云端，而不用先等隧道地址解析 + 探活超时（之前那样要白等 10 多秒）。
+   隧道降级为最后一级，只在 Supabase 暂停/挂了时顶上来（此时需要电脑开着）。 */
 async function cmtInit(){
   if (CMT.ready) return true;
   const _fj = (typeof cmtFetchJson === 'function')
     ? cmtFetchJson
     : function (u, ms) { return fetch(u, { cache: 'no-store' }); };
 
-  // 1) 同源本机后端（局域网 / 电脑开着）—— 最快，保留双活
+  // 1) 同源本机后端（局域网 http://192.168.x.x:8795，最快）
   try {
-    const r = await _fj('/api/health', 4000);
+    const r = await _fj('/api/health', 3000);
     if (r.ok) { CMT.base = ''; CMT.mode = 'local'; CMT.addrSrc = 'same-origin'; CMT.ready = true; return true; }
   } catch (e) {}
 
-  // 2) 公网隧道（api.json，由 tunnel.py 写入）—— 先探活再切，避免挂在 502 上
-  //    地址解析复用页面已有的 cmtResolveBase()：api.github.com 实时 → raw → Pages，带超时
+  // 2) Supabase（云端，电脑关机也能用）—— 先 ping 一下，避免项目被暂停时卡在这里
+  if (SUPA.url && SUPA.key && SUPA.url.indexOf('xxxx') < 0) {
+    if (await supaPing()) {
+      CMT.base = SUPA.url; CMT.mode = 'supa'; CMT.addrSrc = 'supabase'; CMT.ready = true; return true;
+    }
+  }
+
+  // 3) 公网隧道（api.json，由 tunnel.py 写入）—— 兜底，需要那台电脑开着
+  //    地址解析复用页面的 cmtResolveBase()：api.github.com 实时 → raw → Pages，带超时
   try {
     if (typeof cmtResolveBase === 'function') {
       const base = await cmtResolveBase();
       if (base) {
         try {
-          const h = await _fj(base + '/api/health', 6000);
+          const h = await _fj(base + '/api/health', 5000);
           if (h.ok) { CMT.base = base; CMT.mode = 'local'; CMT.ready = true; return true; }
         } catch (e) {}
       }
     }
   } catch (e) {}
 
-  // 3) Supabase（电脑关机也能用）
-  if (SUPA.url && SUPA.key && SUPA.url.indexOf('xxxx') < 0) {
-    CMT.base = SUPA.url; CMT.mode = 'supa'; CMT.ready = true; return true;
-  }
   return false;
 }
 
