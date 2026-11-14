@@ -143,6 +143,42 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 /* 抽屉标题条（仅手机显示） */
 .drawer-hd{display:none;align-items:center;gap:8px;padding:9px 10px 2px;font-size:13px;font-weight:700}
 .drawer-hd .b{margin-left:auto;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--muted);background:var(--bg);line-height:1}
+/* ===== 评论区 ===== */
+.cmtlink{font-size:12px;cursor:pointer;color:var(--pri);white-space:nowrap;display:inline-flex;align-items:center;gap:2px}
+.cmtlink:hover{text-decoration:underline}
+.cmtlink.zero{color:var(--muted)}
+.cs-mask{position:fixed;inset:0;background:rgba(10,15,25,.42);z-index:10000;opacity:0;pointer-events:none;transition:.18s}
+.cs-mask.on{opacity:1;pointer-events:auto}
+.cs{position:fixed;right:0;top:0;bottom:0;width:430px;max-width:100vw;background:var(--card);z-index:10001;transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:-6px 0 40px rgba(0,0,0,.18)}
+.cs.on{transform:none}
+.cs-hd{flex:0 0 auto;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.cs-hd .who{margin-left:auto;font-size:11.5px;font-weight:400;color:var(--muted)}
+.cs-hd .x{font-size:19px;color:var(--muted);cursor:pointer;line-height:1;margin-left:4px}
+.cs-bd{flex:1;overflow-y:auto;padding:10px 12px 14px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.cs-sec{font-size:10.5px;font-weight:700;letter-spacing:.5px;color:#a3aab6;text-transform:uppercase;margin:10px 2px 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cs-sec b{color:var(--pri);font-weight:700}
+.citem{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px}
+.citem.mine{background:#fbfcff;border-color:#dbe6ff}
+.citem .cmeta{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);margin-bottom:4px;flex-wrap:wrap}
+.citem .cnick{font-weight:700;color:#3a404b;font-size:12.3px}
+.citem .cbadge{background:var(--pri-soft);color:var(--pri);border-radius:5px;padding:0 5px;font-size:10.5px}
+.citem .ctext{font-size:13.3px;line-height:1.72;color:#2b2f3a;white-space:pre-wrap;word-break:break-word}
+.citem .creply{margin-top:5px;padding:5px 8px;background:var(--bg);border-radius:6px;font-size:12px;color:#6b7280;white-space:pre-wrap;word-break:break-word}
+.citem .cact{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.cbtn{border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:12px;background:var(--card);color:#5b6270;display:inline-flex;align-items:center;gap:4px}
+.cbtn.on{background:var(--pri-soft);border-color:#b9c6e4;color:var(--pri);font-weight:700}
+.cbtn.del{color:var(--no)}
+.cbtn.up{padding:1px 6px}
+.cbtn:disabled{opacity:.35}
+.cs-ft{flex:0 0 auto;border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom));display:flex;gap:7px;align-items:flex-end}
+.cs-ft textarea{flex:1;height:56px;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font:inherit;font-size:13px;line-height:1.5;resize:none;outline:none}
+.cs-ft textarea:focus{border-color:var(--pri)}
+.cs-login{background:var(--bg);border-radius:10px;padding:12px;font-size:12.5px;color:#5b6270;margin-bottom:10px;width:100%}
+.cs-login input{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;outline:none;margin-bottom:6px;background:#fff}
+.cs-login input:focus{border-color:var(--pri)}
+.cs-login .row{display:flex;gap:7px}
+.cs-login .row .btn{flex:1;justify-content:center;height:34px;font-size:13px}
+.cs-empty{text-align:center;color:#b3bac5;font-size:12.5px;padding:28px 10px;line-height:1.8}
 
 /* 笔记弹层 */
 .npop{position:absolute;z-index:80;width:340px;background:var(--card);border:1px solid #ddd0ff;border-radius:12px;box-shadow:0 16px 40px rgba(30,20,60,.18);padding:12px;display:none}
@@ -303,6 +339,8 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
   .rrow{padding:7px 11px;font-size:12px}
   .rlist{max-height:none}
   .sheet{width:100%;max-width:100vw}
+  .cs{width:100%;max-width:100vw}
+  .cs-ft textarea{height:48px}
   .modal-card{margin:12px;max-width:calc(100vw - 24px)}
   .modal-card .score{font-size:38px}
   .rec-tip{display:none}
@@ -362,6 +400,13 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 </div>
 
 <div class="sheet-mask" id="mask" onclick="closeSheet()"></div>
+<div class="cs-mask" id="csMask" onclick="cmtClose()"></div>
+<div class="cs" id="cs">
+  <div class="cs-hd">评论<span id="csCount" style="font-weight:400;color:var(--muted);font-size:12px"></span>
+    <span class="who" id="csWho"></span><span class="x" onclick="cmtClose()">×</span></div>
+  <div class="cs-bd" id="csBd"></div>
+  <div class="cs-ft" id="csFt"></div>
+</div>
 <div class="sheet" id="sheet">
   <div class="sheet-hd"><h3 id="sheettitle">答题卡</h3><span class="x" onclick="closeSheet()">×</span></div>
   <div class="sheet-bd" id="sheetbody"></div>
@@ -831,7 +876,7 @@ async function loadData(){
 
 /* ================= 启动 ================= */
 (async function boot(){
-  load(); loadCloud();
+  load(); loadCloud(); cmtLoadUser();
   try{
     Object.assign(DB, await loadData());
     const vt=document.getElementById('verTag');
@@ -1037,6 +1082,7 @@ function renderMain(){
       <span class="tag">${q.type==='多选'?'多选':'单选'}</span>
       ${q.kaodian?`<span class="kdlink" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">${esc(q.kaodian)}</span>`:'<span class="tag gray">未标注考点</span>'}
       <span class="spacer" style="flex:1"></span>
+      <span class="cmtlink" onclick="cmtOpen('${tid}')">💬 评论</span>
       <span style="font-size:12px;cursor:pointer;color:${store.fav[tid]?'#e08a00':'#ccd3de'}" onclick="toggleFav('${tid}')">${store.fav[tid]?'★':'☆'}</span>
     </div>
     ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选完按 Enter 确认</div>':''}
@@ -1287,6 +1333,182 @@ function globalSearch(kw){
         return `<div class="li" onclick="startQuiz(['${t}'],'搜索：${esc(kw)}')">
           <span class="t" style="font-size:12.3px;line-height:1.45;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(q.title.slice(0,56))}</span></div>`;}).join('')
       :'<div class="empty">没有匹配</div>');
+}
+
+/* ================= 评论区（服务端：评论服务/server.py） =================
+   排序：我点赞/收藏的置顶（可手动 ↑↓） > 全网 赞+收藏−踩 前 3 > 其余按当日种子随机曝光
+   权限：只能删自己的评论（服务端 403 强制），删别人只能看到“回复/举报” */
+const LS_CMT='cd27_cmt_v1';
+const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null };
+function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null'); if(u&&u.token) CMT.user=u;}catch(e){} }
+function cmtSaveUser(u){ CMT.user=u; try{localStorage.setItem(LS_CMT,JSON.stringify(u))}catch(e){} }
+function cmtLogout(){ CMT.user=null; CMT.me=null; try{localStorage.removeItem(LS_CMT)}catch(e){} }
+function cmtUrl(p){ return CMT.base+p; }
+async function cmtInit(){
+  if(CMT.ready) return true;
+  // ① 同源（页面就是评论服务托管的 / 局域网直连）
+  try{ const r=await fetch('/api/health',{cache:'no-store'}); if(r.ok){ CMT.base=''; CMT.ready=true; return true; } }catch(e){}
+  // ② 线上页面：从仓库 api.json 拿隧道地址
+  const urls=['https://raw.githubusercontent.com/linyunshen0-hue/n27-sync/main/api.json',
+              'https://linyunshen0-hue.github.io/n27-sync/api.json'];
+  for(let i=0;i<urls.length;i++){
+    try{ const r=await fetch(urls[i]+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) continue;
+      const j=await r.json(); if(j&&j.api){ CMT.base=String(j.api).replace(/\/$/,''); CMT.ready=true; return true; } }catch(e){}
+  }
+  return false;
+}
+async function cmtApi(path, opt){
+  opt=opt||{};
+  const h={'Content-Type':'application/json'};
+  if(CMT.user&&CMT.user.token) h.Authorization='Bearer '+CMT.user.token;
+  const r=await fetch(cmtUrl(path),{method:opt.method||'GET',headers:h,
+    body:opt.body?JSON.stringify(opt.body):undefined, cache:'no-store'});
+  let j={}; try{ j=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(j.err||('HTTP '+r.status));
+  return j;
+}
+function cmtOpen(tid){
+  CMT.tid=tid; CMT.replyTo=null; CMT.me=null;
+  document.getElementById('cs').classList.add('on');
+  document.getElementById('csMask').classList.add('on');
+  document.getElementById('csBd').innerHTML='<div class="cs-empty">加载中…</div>';
+  document.getElementById('csCount').textContent='';
+  document.getElementById('csWho').textContent='';
+  document.getElementById('csFt').innerHTML='';
+  cmtInit().then(function(ok){
+    if(!ok){ document.getElementById('csBd').innerHTML='<div class="cs-empty">评论服务连不上<br><span style="font-size:11px">服务端没启动 / 隧道地址过期</span></div>'; return; }
+    cmtRefresh();
+  });
+}
+function cmtClose(){ document.getElementById('cs').classList.remove('on'); document.getElementById('csMask').classList.remove('on'); }
+async function cmtRefresh(){
+  if(!CMT.tid) return;
+  try{
+    const j=await cmtApi('/api/c/'+encodeURIComponent(CMT.tid));
+    CMT.list=j.list||[];
+    if(j.me) CMT.me=j.me;
+    document.getElementById('csCount').textContent=' · '+CMT.list.length+' 条';
+    cmtRender();
+  }catch(e){
+    document.getElementById('csBd').innerHTML='<div class="cs-empty">读取失败：'+esc(e.message)+'</div>';
+  }
+}
+function cmtById(id){ for(let i=0;i<CMT.list.length;i++) if(CMT.list[i].id===id) return CMT.list[i]; return null; }
+function cmtRender(){
+  const bd=document.getElementById('csBd'), ft=document.getElementById('csFt'), who=document.getElementById('csWho');
+  const _old=document.getElementById('csText'); if(_old) CMT.draft=_old.value;
+  const me=CMT.me||{like:[],dislike:[],star:[],pin:[]};
+  const mineIds={};
+  (me.like||[]).forEach(function(id){mineIds[id]=1}); (me.star||[]).forEach(function(id){mineIds[id]=1});
+  const rank=function(c){ return (c.likes||0)+(c.stars||0)-(c.dislikes||0); };
+  const mine=CMT.list.filter(function(c){return mineIds[c.id]});
+  const pinIdx=function(id){ const i=(me.pin||[]).indexOf(id); return i<0?1e9:i; };
+  mine.sort(function(a,b){ return pinIdx(a.id)-pinIdx(b.id) || a.ts-b.ts; });
+  const rest=CMT.list.filter(function(c){return !mineIds[c.id]});
+  const top=rest.slice().sort(function(a,b){ return rank(b)-rank(a) || b.ts-a.ts; }).slice(0,3);
+  const topIds={}; top.forEach(function(c){topIds[c.id]=1});
+  const others=rest.filter(function(c){return !topIds[c.id]});
+  const seed=Math.floor(Date.now()/86400000);
+  const hh=function(s){ let x=2166136261; for(let i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619); } return (x>>>0); };
+  others.sort(function(a,b){ return hh(a.id+seed)-hh(b.id+seed); });
+
+  who.innerHTML=CMT.user
+    ? '<span class="cmtlink" onclick="cmtLogout();cmtRender()">'+esc(CMT.user.nick)+' · 退出</span>'
+    : '未登录';
+
+  let h='';
+  if(!CMT.list.length) h+='<div class="cs-empty">还没有评论，来说第一句</div>';
+  if(mine.length) h+='<div class="cs-sec">我点赞 / 收藏的 <b>'+mine.length+'</b><span style="text-transform:none;font-weight:400;color:#b3bac5">（可用 ↑↓ 调顺序）</span></div>'
+    +mine.map(function(c,i){ return cmtItem(c,'mine',i,mine.length); }).join('');
+  if(top.length) h+='<div class="cs-sec">热门前 3 <span style="text-transform:none;font-weight:400;color:#b3bac5">赞＋收藏−踩</span></div>'
+    +top.map(function(c){ return cmtItem(c,'top'); }).join('');
+  if(others.length) h+='<div class="cs-sec">全部评论 <span style="text-transform:none;font-weight:400;color:#b3bac5">每日轮换曝光</span></div>'
+    +others.map(function(c){ return cmtItem(c,''); }).join('');
+  bd.innerHTML=h;
+
+  if(CMT.user){
+    ft.innerHTML='<textarea id="csText" maxlength="800" placeholder="说点什么…（'+(CMT.replyTo?'回复 '+esc((cmtById(CMT.replyTo)||{}).nick||''):esc(CMT.user.nick))+'）"></textarea>'
+      +'<button class="btn pri" style="height:36px;flex:0 0 auto" onclick="cmtSend()">发送</button>';
+    const _t=document.getElementById('csText'); if(_t&&CMT.draft) _t.value=CMT.draft;
+  }else{
+    ft.innerHTML='<div class="cs-login"><div style="margin-bottom:6px">登录后才能发评论 / 点赞；只能删自己的评论。</div>'
+      +'<input id="csNick" placeholder="昵称（2–16 位）" maxlength="16" autocomplete="off">'
+      +'<input id="csPass" type="password" placeholder="口令（至少 6 位）" autocomplete="current-password">'
+      +'<div class="row"><button class="btn pri" onclick="cmtAuth(\'login\')">登录</button>'
+      +'<button class="btn line" onclick="cmtAuth(\'reg\')">注册</button></div></div>';
+  }
+}
+function cmtItem(c, zone, idx, total){
+  const me=CMT.me||{};
+  const isMine=CMT.user&&c.uid===CMT.user.uid;
+  const d=new Date(c.ts);
+  const ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const rep=c.reply_to?cmtById(c.reply_to):null;
+  let h='<div class="citem '+(zone==='mine'?'mine':'')+'">'
+    +'<div class="cmeta"><span class="cnick">'+esc(c.nick)+'</span>'
+    +(isMine?'<span class="cbadge">我</span>':'')+'<span>'+ts+'</span>'
+    +(zone==='top'?'<span class="cbadge" style="background:#fff6e6;color:#e08a00">热</span>':'')+'</div>'
+    +'<div class="ctext">'+esc(c.text)+'</div>'
+    +(rep?'<div class="creply">回复 '+esc(rep.nick)+'：'+esc(rep.text.slice(0,80))+'</div>':'')
+    +'<div class="cact">'
+    +'<button class="cbtn '+((me.like||[]).indexOf(c.id)>=0?'on':'')+'" onclick="cmtReact(\''+c.id+'\',\'like\')">👍 '+(c.likes||0)+'</button>'
+    +'<button class="cbtn '+((me.dislike||[]).indexOf(c.id)>=0?'on':'')+'" onclick="cmtReact(\''+c.id+'\',\'dislike\')">👎 '+(c.dislikes||0)+'</button>'
+    +'<button class="cbtn '+((me.star||[]).indexOf(c.id)>=0?'on':'')+'" onclick="cmtReact(\''+c.id+'\',\'star\')">⭐ '+(c.stars||0)+'</button>'
+    +'<span class="sp"></span>'
+    +'<button class="cbtn" onclick="cmtReply(\''+c.id+'\')">回复</button>'
+    +(isMine?'<button class="cbtn del" onclick="cmtDel(\''+c.id+'\')">删除</button>':'')
+    +(zone==='mine'?'<button class="cbtn up" '+(idx===0?'disabled':'')+' onclick="cmtPinMove(\''+c.id+'\',-1)">↑</button>'
+      +'<button class="cbtn up" '+(idx===total-1?'disabled':'')+' onclick="cmtPinMove(\''+c.id+'\',1)">↓</button>':'')
+    +'</div></div>';
+  return h;
+}
+async function cmtReact(cid,kind){
+  if(!CMT.user){ alert('先登录'); return; }
+  try{ await cmtApi('/api/r',{method:'POST',body:{cid:cid,kind:kind}}); await cmtRefresh(); }
+  catch(e){ alert(e.message); }
+}
+async function cmtDel(cid){
+  if(!confirm('删除这条评论？')) return;
+  try{ await cmtApi('/api/c/'+cid,{method:'DELETE'}); await cmtRefresh(); }
+  catch(e){ alert(e.message); }
+}
+function cmtReply(cid){
+  CMT.replyTo=cid; cmtRender();
+  const t=document.getElementById('csText'); if(t) t.focus();
+}
+async function cmtPinMove(cid,dir){
+  const me=CMT.me||{}; const mineIds={};
+  (me.like||[]).forEach(function(id){mineIds[id]=1}); (me.star||[]).forEach(function(id){mineIds[id]=1});
+  const pinIdx=function(id){ const i=(me.pin||[]).indexOf(id); return i<0?1e9:i; };
+  const cur=CMT.list.filter(function(c){return mineIds[c.id]})
+    .sort(function(a,b){ return pinIdx(a.id)-pinIdx(b.id) || a.ts-b.ts; })
+    .map(function(c){return c.id});
+  const i=cur.indexOf(cid), j=i+dir;
+  if(i<0||j<0||j>=cur.length) return;
+  const t=cur[i]; cur[i]=cur[j]; cur[j]=t;
+  try{ await cmtApi('/api/pin',{method:'POST',body:{tid:CMT.tid,order:cur}});
+    if(CMT.me) CMT.me.pin=cur; cmtRender(); }
+  catch(e){ alert(e.message); }
+}
+async function cmtSend(){
+  const el=document.getElementById('csText'); const t=(el&&el.value||'').trim();
+  if(!t) return;
+  if(!CMT.user){ alert('先登录'); return; }
+  try{
+    await cmtApi('/api/c',{method:'POST',body:{tid:CMT.tid,text:t,reply_to:CMT.replyTo}});
+    CMT.replyTo=null; CMT.draft=''; if(el) el.value='';
+    await cmtRefresh();
+  }catch(e){ alert(e.message); }
+}
+async function cmtAuth(kind){
+  const nickEl=document.getElementById('csNick'), passEl=document.getElementById('csPass');
+  const nick=(nickEl&&nickEl.value||'').trim(), pass=(passEl&&passEl.value||'');
+  if(!nick||!pass) return alert('填昵称和口令');
+  try{
+    const j=await cmtApi('/api/'+(kind==='reg'?'reg':'login'),{method:'POST',body:{nick:nick,pass:pass}});
+    cmtSaveUser({token:j.token,uid:j.uid,nick:j.nick});
+    await cmtRefresh();
+  }catch(e){ alert(e.message); }
 }
 
 /* ================= 键盘 ================= */
