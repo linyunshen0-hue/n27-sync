@@ -1544,8 +1544,9 @@ async function cmtRefresh(manual){
     setCmtState('');
     cmtRender();
   }catch(e){
-    setCmtState('连不上：'+e.message);
-    if(manual) alert(e.message);
+    CMT.ready=false;   // 下回重新读 api.json，拿最新的隧道地址
+    setCmtState('评论服务暂时连不上，点「刷新」重试');
+    if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论会先存在本机，恢复后自动补发。');
   }finally{ CMT.loading=false; }
 }
 
