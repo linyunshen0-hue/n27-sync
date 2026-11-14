@@ -96,6 +96,13 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .opt.no{border-color:var(--no);background:var(--no-soft)}
 .opt.no .k{background:var(--no);border-color:var(--no);color:#fff}
 .multi-tip{font-size:11.5px;color:var(--warn);background:var(--warn-soft);padding:3px 8px;border-radius:5px;display:inline-block;margin-bottom:9px}
+.q-act{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--line);flex-wrap:wrap}
+.q-act .q-sub{height:44px;padding:0 28px;font-size:15px;border-radius:10px;flex:0 0 auto;font-weight:600}
+.q-act .q-sub[disabled]{opacity:.55}
+.q-act .kbd-hint{margin-left:10px;font-size:11px;opacity:.8;border:1px solid rgba(255,255,255,.5);border-radius:4px;padding:1px 5px;font-weight:400}
+.q-act-tip{font-size:11.8px;color:var(--muted)}
+.q-act-ok{font-size:13.5px;font-weight:600;color:var(--ok)}
+.q-act-ok.no{color:var(--no)}
 
 /* 工具条 */
 .tools{flex:0 0 auto;display:flex;justify-content:center;padding:9px 20px;background:var(--card);border-top:1px solid var(--line)}
@@ -394,8 +401,8 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
   <button class="mobmenu" id="ucbtn" onclick="ucOpen()" aria-label="我的" style="display:flex;margin-left:auto" title="我的 / 建议">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.4-6.2 7.5-6.2s7.5 2.2 7.5 6.2"/></svg></button>
   <div class="seg" id="modeseg">
-    <button data-m="practice" class="on" onclick="setMode('practice')">练习</button>
-    <button data-m="exam" onclick="setMode('exam')">考试</button>
+    <button data-m="practice" class="on" onclick="setMode('practice')" title="练习：选好选项 → 点「提交本题」才判对错">练习</button>
+    <button data-m="exam" onclick="setMode('exam')" title="考试：选了不判，交卷后统一统分">考试</button>
   </div>
   <div class="hstat" id="hstat"></div>
 </header>
@@ -589,6 +596,19 @@ function scheduleSync(){   // 改动落盘后 15s 自动上传（去抖），避
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(function(){ cloudSync(true); },15000);
 }
+/* 评论账号 ⇄ 云端同步码：登录评论账号后，同步码自动用 u-<uid>，不用再手抄 14 位 */
+function cloudUserKey(uid){ return ('u-'+String(uid||'').toLowerCase()).replace(/[^a-z0-9_-]/g,'').slice(0,40); }
+async function cloudBindUser(uid){
+  const k=cloudUserKey(uid); if(k.length<7) return;
+  if(cloud.key===k){ scheduleSync(); return; }
+  const old=cloud.key;
+  if(old && !confirm('把本机记录合并到「评论账号」的同步码？\n\n原同步码 '+old+' 的云端文件不会删除，随时可以切回去。')) return;
+  cloud.key=k; saveCloud();
+  try{ await cloudPull(true); }catch(e){}
+  try{ await cloudPush(); }catch(e){}
+  try{ renderAll(); }catch(e){}
+}
+
 function cloudSetupKey(){
   const cur=cloud.key||'';
   const v=prompt('同步码（换设备输入同一个码即可共享记录）\n留空 = 自动生成新码；新码就是新的云端文件',cur);
@@ -1104,7 +1124,7 @@ function renderMain(){
   const ids=S.quiz.ids,i=S.idx,tid=ids[i],q=DB.questions[tid];
   if(!q){ wrap.innerHTML='<div class="empty">题目不存在</div>'; return; }
   const ans=S.answers[tid]||[];
-  const revealed = S.mode==='practice' ? ans.length>0 : !!S.revealed[tid];
+  const revealed = !!S.revealed[tid] || S.submitted;   // 练习/考试都只在“提交后”才判
   const rel=sameKaodian(tid);
 
   head.innerHTML=`<button class="btn line" style="height:29px;padding:0 10px;font-size:12.5px;flex:0 0 auto" onclick="backOne()"
@@ -1124,7 +1144,7 @@ function renderMain(){
       <span class="cmtlink" onclick="cmtGoto()">💬 评论</span>
       <span class="favbtn ${store.fav[tid]?'on':''}" onclick="toggleFav('${tid}')" title="${store.fav[tid]?'取消收藏':'收藏'}">${store.fav[tid]?'★':'☆'}</span>
     </div>
-    ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选完按 Enter 确认</div>':''}
+    ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「提交本题」</div>':''}
     <div class="q-title">${esc(q.title)}
       <span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>
     </div>
@@ -1142,7 +1162,25 @@ function renderMain(){
     </div>
     ${has?`<div style="margin:-4px 0 6px 30px;background:var(--note-soft);border-left:3px solid var(--note);border-radius:6px;padding:6px 10px;font-size:12.5px;line-height:1.6;color:#4b3a7a;white-space:pre-wrap">${esc(has)}</div>`:''}`;
   });
-  h+='</div></div>';
+  h+='</div>';
+  if(S.mode==='practice' && !S.submitted){
+    if(!revealed){
+      h+=`<div class="q-act"><button class="btn pri q-sub" onclick="submitOne()">提交本题<span class="kbd-hint">Enter</span></button>`
+        +(q.type==='多选'?'<span class="q-act-tip">多选：全部选项选好再提交</span>':'')
+        +(ans.length?'':'<span class="q-act-tip">先选一个选项</span>')+`</div>`;
+    }else{
+      const _ok=isRight(q,ans), _jd=!!(S.judged&&S.judged[tid]);
+      const _ca=Array.isArray(q.answer)?q.answer.join(''):String(q.answer==null?'':q.answer);
+      h+=`<div class="q-act"><span class="q-act-ok${_ok?'':' no'}">${_jd?(_ok?'✓ 已提交 · 答对':'✗ 已提交 · 答错'):'👀 已看解析（未计入错题）'}</span>`
+        +`<button class="btn line" onclick="clearAnswer()" style="height:34px">重新作答</button>`
+        +`<span class="q-act-tip">正确答案：${esc(_ca)}</span></div>`;
+    }
+  }
+  if(S.submitted){
+    h+=`<div class="q-act"><span class="q-act-ok">本卷已交卷</span>`
+      +`<button class="btn line" onclick="resetQuiz()" style="height:34px">重做本卷</button></div>`;
+  }
+  h+='</div>';
   // 评论区挂在题目下面：先摘下来，重绘主区后再放回（避免选答案时被清空）
   const _cmt=document.getElementById('cmtBox');
   if(_cmt && _cmt.dataset.tid!==tid){ _cmt.remove(); }
@@ -1159,7 +1197,7 @@ function renderMain(){
     <button class="btn" onclick="prev()" ${i===0?'disabled':''}>上一题</button>
     <button class="btn" onclick="next()" ${i===ids.length-1?'disabled':''}>下一题</button>
     <button class="btn danger" onclick="dontKnow()">不会</button>
-    <button class="btn" onclick="revealNow()" ${revealed?'disabled':''}>解析</button>
+    <button class="btn" onclick="resetQuiz()">重做</button>
     <button class="btn pri" onclick="submit()">交卷</button></div>`
     : `<div class="tools-inner">
     <button class="btn line" onclick="openSheet()">答题卡 ${Object.keys(S.answers).length}/${ids.length}</button>
@@ -1173,14 +1211,40 @@ function renderMain(){
 
 function pick(k){
   if(S._swiped && Date.now()-S._swiped < 300) return;
+  if(!S.quiz || S.submitted) return;
   const tid=S.quiz.ids[S.idx],q=DB.questions[tid];
   let arr=S.answers[tid]||[];
   if(q.type==='多选'){ arr=arr.includes(k)?arr.filter(x=>x!==k):arr.concat(k); }
   else arr=[k];
   S.answers[tid]=arr.sort();
-  if(S.mode==='practice'&&q.type!=='多选'){ S.revealed[tid]=true; rec(tid,arr); }
-  if(S.mode==='exam') S.revealed[tid]=false;
+  S.revealed[tid]=false;      // 改选后回到“未判定”，要重新提交才判
+  if(S.judged) delete S.judged[tid];
   renderAll();
+}
+/* 提交本题：练习模式判分+写错题本；考试模式不判，只记答案 */
+function submitOne(){
+  if(!S.quiz||S.submitted) return;
+  const tid=S.quiz.ids[S.idx], q=DB.questions[tid], a=S.answers[tid]||[];
+  if(!a.length) return alert(q.type==='多选'?'多选题：至少选一项再提交':'先选一个选项再提交');
+  if(S.mode==='exam'){ S.revealed[tid]=false; renderAll(); next(); return; }
+  S.revealed[tid]=true; rec(tid,a); S.judged=S.judged||{}; S.judged[tid]=true; save(); renderAll();
+  setTimeout(function(){ const d=document.getElementById('mobDetail');
+    if(d && isMob()) d.scrollIntoView({behavior:'smooth',block:'start'}); },70);
+}
+/* 重选：撤掉本题判定，答案保留 */
+function clearAnswer(){
+  if(!S.quiz||S.submitted) return;
+  const tid=S.quiz.ids[S.idx];
+  delete S.revealed[tid]; if(S.judged) delete S.judged[tid]; renderAll();
+}
+/* 重新刷题：清空本卷作答与判定（错题本、成绩记录不动） */
+function resetQuiz(){
+  if(!S.quiz) return;
+  const ids=S.quiz.ids;
+  if(!confirm('重做本卷（'+ids.length+' 题）？\n\n会清空本卷的作答和判定；错题本与成绩记录保留，重做答对会自动移出错题本。')) return;
+  ids.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done) delete store.done[t]; });
+  S.submitted=false; S.idx=0; S._lastTid=null;
+  save(); renderAll();
 }
 function rec(tid,arr){
   const q=DB.questions[tid], ok=isRight(q,arr);
@@ -1280,10 +1344,10 @@ function renderDetail(){
   if(!mob) clearMobDetail();
   if(!S.quiz){ hd.textContent=''; el.innerHTML=`<div class="empty-detail">选一道题开始</div>`; return; }
   const tid=S.quiz.ids[S.idx], q=DB.questions[tid], ans=S.answers[tid]||[];
-  const revealed = S.mode==='practice' ? ans.length>0 : !!S.revealed[tid];
+  const revealed = !!S.revealed[tid] || S.submitted;
   if(!revealed){
     hd.textContent='';
-    const tip=`${S.mode==='exam'?'考试模式：交卷后显示':'选一个选项后自动显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示</span>`;
+    const tip=`${S.mode==='exam'?'考试模式：交卷后显示':'选好选项后点「提交本题」显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示（不计分）</span>`;
     if(mob) setMobDetail(`<div class="empty-detail" style="height:auto;padding:4px 0">${tip}</div>`);
     else el.innerHTML=`<div class="empty-detail">${tip}</div>`;
     return;
@@ -1336,6 +1400,7 @@ function submit(){
     <div class="sub">${esc(S.quiz.title)}</div>
     <div class="modal-stats"><div class="g"><b>${okN}</b>正确</div><div class="r"><b>${noN}</b>错误</div><div><b>${blank}</b>未答</div></div>
     <div class="modal-actions"><button class="btn line" onclick="this.closest('.modal').remove()">关闭</button>
+      <button class="btn line" onclick="this.closest('.modal').remove();resetQuiz()">重做本卷</button>
       <button class="btn pri" onclick="this.closest('.modal').remove();S.idx=0;renderAll()">逐题看解析</button></div></div>`;
   m.onclick=e=>{ if(e.target===m) m.remove(); };
   document.body.appendChild(m);
@@ -1350,13 +1415,16 @@ function openSheet(){
   let h='<div class="grid">';
   ids.forEach((t,j)=>{
     const a=S.answers[t]||[]; let cls='';
-    if(S.submitted||S.revealed[t]||(S.mode==='practice'&&a.length)) cls=isRight(DB.questions[t],a)?'ok':'no';
+    if(S.submitted||S.revealed[t]) cls=isRight(DB.questions[t],a)?'ok':'no';
     else if(a.length) cls='done';
     if(j===S.idx) cls+=' cur';
     const hasN=noteText(t)||Object.keys(notes).some(k=>k.startsWith(t+'|'));
     h+=`<b class="${cls}" onclick="jump(${j})">${j+1}${hasN?'<span class="d"></span>':''}</b>`;
   });
   h+=`</div><div class="legend"><span class="l1">已答</span><span class="l2">正确</span><span class="l3">错误</span><span class="l4">未答</span><span class="l5">有笔记</span></div>`;
+  h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+        <button class="btn line" onclick="closeSheet();resetQuiz()">重做本卷</button>
+        <span style="font-size:11.8px;color:var(--muted)">清空本卷作答与判定（错题本、成绩记录保留）</span></div>`;
   document.getElementById('sheetbody').innerHTML=h;
   document.getElementById('mask').classList.add('on'); document.getElementById('sheet').classList.add('on');
 }
@@ -1673,6 +1741,7 @@ async function cmtAuth(kind){
   try{
     const j=await cmtApi('/api/'+(kind==='reg'?'reg':'login'),{method:'POST',body:{nick:nick,pass:pass}});
     cmtSaveUser({token:j.token,uid:j.uid,nick:j.nick});
+    cloudBindUser(j.uid);   // 评论账号 = 同步账号：登录后自动绑定同步码
     if(document.getElementById('uc').classList.contains('on')) ucRender();
     await cmtRefresh(false);
   }catch(e){ alert(e.message); }
@@ -1836,8 +1905,8 @@ function bindKeys(){
     if(e.key==='Enter'||e.key==='ArrowRight'){
       e.preventDefault();
       const tid=S.quiz.ids[S.idx], ar=S.answers[tid]||[];
-      const rev=S.mode==='practice'?ar.length>0:!!S.revealed[tid];
-      if(ar.length&&!rev) revealNow(); else next(); return;
+      const rev=!!S.revealed[tid]||S.submitted;
+      if(ar.length&&!rev) submitOne(); else next(); return;
     }
     if(e.key==='ArrowLeft'){ e.preventDefault(); prev(); return; }
     if(e.key===' '){ e.preventDefault(); revealNow(); return; }
