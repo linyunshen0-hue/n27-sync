@@ -219,6 +219,70 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 .sp{flex:1}
 .xbtn{border:0;background:transparent;color:#c2c8d2;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:5px}
 .xbtn:hover{background:#fff1f0;color:#d4380d}
+
+/* ================= 响应式 ================= */
+/* --- 平板 --- */
+@media (max-width:1024px){
+  .side{flex:0 0 232px}
+  .hstat{display:none}
+  .search{max-width:none}
+  .qwrap{padding:14px 14px 22px}
+  .q-title{font-size:16px}
+  .opt .v{font-size:14.4px}
+}
+/* --- 手机：侧栏变抽屉 + 底部导航 --- */
+.mask{position:fixed;inset:0;background:rgba(10,15,25,.42);z-index:55;opacity:0;pointer-events:none;transition:opacity .18s}
+.mask.on{opacity:1;pointer-events:auto}
+.mobnav{display:none;position:fixed;left:0;right:0;bottom:0;height:56px;background:var(--card);
+  border-top:1px solid var(--line);z-index:50;padding-bottom:env(safe-area-inset-bottom)}
+.mobnav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:10px;color:var(--muted);border:0;background:none;padding:0;-webkit-tap-highlight-color:transparent}
+.mobnav button.on{color:var(--pri);font-weight:600}
+.mobnav svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.9}
+
+@media (max-width:700px){
+  .topbar{flex:0 0 auto;padding:7px 10px;gap:8px;flex-wrap:nowrap}
+  .logo{font-size:14px}
+  .logo > span{display:none}
+  .search{max-width:none;padding:5px 9px;min-width:0}
+  .search input{font-size:13px}
+  .seg button{padding:4px 9px;font-size:12px}
+  .hstat{display:none}
+
+  .side{position:fixed;left:0;top:0;bottom:0;width:86%;max-width:330px;z-index:60;
+        transform:translateX(-102%);transition:transform .22s cubic-bezier(.4,0,.2,1);
+        box-shadow:6px 0 40px rgba(0,0,0,.18);border-right:1px solid var(--line);flex:none}
+  .side.open{transform:none}
+  .side-body{padding-bottom:76px}
+
+  .main{padding-bottom:56px}
+  .main-head{padding:7px 10px;gap:7px}
+  .main-head .where{font-size:12px}
+  .qwrap{padding:12px 11px 18px}
+  .qcard{max-width:none}
+  .q-title{font-size:15.6px;line-height:1.76;margin-bottom:13px;padding-right:32px}
+  .opt{padding:10px 10px 10px 12px;gap:9px}
+  .opt .v{font-size:14.2px;line-height:1.6}
+  .tools{padding:7px 10px}
+  .tools-inner{gap:6px}
+  .btn{height:38px;padding:0 12px;font-size:13px}
+  .mobnav{display:flex}
+
+  .statgrid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .statc{padding:10px 12px}
+  .statc b{font-size:19px}
+  .panel{margin-bottom:10px}
+  .toolbar{padding:8px 10px;gap:6px}
+  .qlist{max-height:none}
+  .qrow{padding:9px 11px}
+  .qt{font-size:12.6px}
+  .qm{font-size:11px}
+  .rrow{padding:7px 11px;font-size:12px}
+  .rlist{max-height:none}
+  .sheet{width:100%;max-width:100vw}
+  .modal-card{margin:12px;max-width:calc(100vw - 24px)}
+  .modal-card .score{font-size:38px}
+}
 </style>
 </head>
 <body>
@@ -289,6 +353,27 @@ function loadScores(){ try{const a=JSON.parse(localStorage.getItem(LS_SCORE)||'[
 function saveScores(a){ try{localStorage.setItem(LS_SCORE,JSON.stringify(a))}catch(e){} }
 function recordScore(o){ const a=loadScores(); a.push(o); if(a.length>300) a.splice(0,a.length-300); saveScores(a); }
 function hitWrong(tid){ store.wrong[tid]=(Number(store.wrong[tid])||0)+1; }
+/* ================= 移动端抽屉 / 底部导航 ================= */
+function openDrawer(){
+  var sd=document.querySelector('.side'), mk=document.getElementById('mask');
+  if(sd) sd.classList.add('open');
+  if(mk) mk.classList.add('on');
+}
+function closeDrawer(){
+  var sd=document.querySelector('.side'), mk=document.getElementById('mask');
+  if(sd) sd.classList.remove('open');
+  if(mk) mk.classList.remove('on');
+}
+function syncMob(n){
+  var bs=document.querySelectorAll('#mobnav button');
+  for(var i=0;i<bs.length;i++) bs[i].classList.toggle('on', bs[i].dataset.nav===n);
+}
+function mobTab(n){
+  if(n==='record'){ closeDrawer(); switchNav('record'); syncMob('record'); return; }
+  switchNav(n); openDrawer(); syncMob(n);
+}
+window.addEventListener('resize', function(){ if(window.innerWidth>700) closeDrawer(); });
+
 
 function scoreChart(data){
   if(!data.length) return '<div class="empty" style="padding:26px;font-size:12.5px">交卷后这里会出现折线图</div>';
@@ -568,7 +653,7 @@ function renderHstat(){
 }
 
 /* ================= 左栏 ================= */
-function switchNav(n){ S.nav=n; S.sideBook=null; if(n==='record'){S.quiz=null;S.idx=0;} closeNote();
+function switchNav(n){ S.nav=n; S.sideBook=null; if(n==='record'){S.quiz=null;S.idx=0;} closeNote(); if(typeof syncMob==='function') syncMob(n);
   document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===n));
   renderSide(); }
 function renderSide(){
@@ -682,11 +767,11 @@ function sideRecord(){
 }
 
 /* ================= 刷题 ================= */
-function startQuizBySet(bi,si){ const b=DB.books[bi],s=b.sets[si];
+function startQuizBySet(bi,si){ if(typeof closeDrawer==='function') closeDrawer(); const b=DB.books[bi],s=b.sets[si];
   S.hist=[];                       // 从左侧选卷 = 新起点，清空返回栈
   s.items.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; });  // 重刷：清这一套的旧作答
   startQuiz(s.items, b.name.replace('（已更新）','')+' · '+s.set, null, true); }
-function startQuiz(ids,title,atTid,resetHist){
+function startQuiz(ids,title,atTid,resetHist){ if(typeof closeDrawer==='function') closeDrawer();
   if(!ids||!ids.length) return;
   if(!resetHist && S.quiz && (S.quiz.ids!==ids || S.quiz.title!==title)){
     S.hist.push({quiz:{ids:S.quiz.ids,title:S.quiz.title}, idx:S.idx});
@@ -1042,5 +1127,19 @@ function bindKeys(){
   });
 }
 </script>
+
+<div class="mask" id="mask" onclick="closeDrawer()"></div>
+<nav class="mobnav" id="mobnav">
+  <button data-nav="sets" class="on" onclick="mobTab('sets')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg><span>套卷</span></button>
+  <button data-nav="tree" onclick="mobTab('tree')">
+    <svg viewBox="0 0 24 24"><path d="M4 6h6M4 12h10M4 18h6"/><circle cx="17" cy="6" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>考点</span></button>
+  <button data-nav="mantras" onclick="mobTab('mantras')">
+    <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.4.3.5.7.5 1.1v1h6v-1c0-.4.1-.8.5-1.1A6 6 0 0012 3z"/></svg><span>口诀</span></button>
+  <button data-nav="notes" onclick="mobTab('notes')">
+    <svg viewBox="0 0 24 24"><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5"/><path d="M8 13h8M8 17h5"/></svg><span>笔记</span></button>
+  <button data-nav="record" onclick="mobTab('record')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>记录</span></button>
+</nav>
 </body>
 </html>
