@@ -1539,15 +1539,46 @@ function cmtApplyLocal(kind,cid,on){
 }
 
 function cmtUrl(p){ return CMT.base+p; }
-async function cmtInit(){
-  if(CMT.ready) return true;
-  try{ const r=await fetch('/api/health',{cache:'no-store'}); if(r.ok){ CMT.base=''; CMT.ready=true; return true; } }catch(e){}
-  const urls=['https://raw.githubusercontent.com/linyunshen0-hue/n27-sync/main/api.json',
+function cmtFetchJson(url, ms){
+  return new Promise(function(res, rej){
+    const ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    const t=setTimeout(function(){ try{ if(ctl) ctl.abort(); }catch(e){} rej(new Error('timeout')); }, ms||9000);
+    fetch(url,{cache:'no-store', signal: ctl?ctl.signal:undefined})
+      .then(function(r){ clearTimeout(t); res(r); })
+      .catch(function(e){ clearTimeout(t); rej(e); });
+  });
+}
+/* 隧道地址解析：优先 api.github.com contents（**实时，不走 CDN 缓存**），
+   再回退 raw.githubusercontent / Pages（这两个可能滞后几分钟）。
+   地址每次重连都会变，这是之前“时好时坏”的根因。 */
+async function cmtResolveBase(){
+  try{
+    const r=await cmtFetchJson('https://api.github.com/repos/'+SYNC.repo+'/contents/api.json?t='+Date.now(), 9000);
+    if(r.ok){
+      const j=await r.json();
+      if(j&&j.content){
+        const o=JSON.parse(b64dec(String(j.content).replace(/\s/g,'')));
+        if(o&&o.api){ CMT.addrSrc='gh-api'; return String(o.api).replace(/\/$/,''); }
+      }
+    }
+  }catch(e){}
+  const urls=['https://raw.githubusercontent.com/'+SYNC.repo+'/'+SYNC.branch+'/api.json',
               'https://linyunshen0-hue.github.io/n27-sync/api.json'];
   for(let i=0;i<urls.length;i++){
-    try{ const r=await fetch(urls[i]+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) continue;
-      const j=await r.json(); if(j&&j.api){ CMT.base=String(j.api).replace(/\/$/,''); CMT.ready=true; return true; } }catch(e){}
+    try{
+      const r=await cmtFetchJson(urls[i]+'?t='+Date.now(), 9000);
+      if(!r.ok) continue;
+      const o=await r.json();
+      if(o&&o.api){ CMT.addrSrc=(i?'pages':'raw'); return String(o.api).replace(/\/$/,''); }
+    }catch(e){}
   }
+  return '';
+}
+async function cmtInit(){
+  if(CMT.ready) return true;
+  try{ const r=await fetch('/api/health',{cache:'no-store'}); if(r.ok){ CMT.base=''; CMT.ready=true; CMT.addrSrc='same-origin'; return true; } }catch(e){}
+  const base=await cmtResolveBase();
+  if(base){ CMT.base=base; CMT.ready=true; return true; }
   return false;
 }
 async function cmtApi(path, opt){
@@ -1631,6 +1662,10 @@ async function cmtRefresh(manual){
       setCmtState((CMT.list&&CMT.list.length)?'':'');
     }
     if(manual) alert('连不上评论服务（'+e.message+'）\n\n可能是本机服务或公网隧道暂时中断，等几秒再点「刷新」。\n你发的评论/点赞会先存在本机，恢复后自动同步。');
+    // 隧道地址可能刚漂移：3 秒后自动重解析并重试一次
+    if(!manual && !CMT._retry){
+      CMT._retry=setTimeout(function(){ CMT._retry=null; if(!CMT.loading) cmtRefresh(false); },3000);
+    }
   }finally{ CMT.loading=false; }
 }
 
