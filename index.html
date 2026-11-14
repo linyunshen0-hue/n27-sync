@@ -545,7 +545,7 @@ function mergeCloud(remote){
 async function cloudPull(silent){
   if(!cloud.key){ if(!silent) alert('先在「记录 → 云端同步」里设置同步码'); return null; }
   /* ① 登录了评论账号 → 走评论服务（不需要 GitHub Token） */
-  if(cmtAuthed()){
+  if(SUPA_PROGRESS && cmtAuthed()){
     try{
       if(!CMT.ready && !(await cmtInit())) throw new Error('评论服务不可用');
       const j=await cmtApi('/api/progress');
@@ -585,7 +585,7 @@ async function cloudPush(){
     store:{done:store.done,wrong:store.wrong,fav:store.fav,dk:store.dk,mt:store.mt,del:store.del},
     scores:loadScores()};
   /* ① 登录了评论账号 → 直接传服务端 */
-  if(cmtAuthed()){
+  if(SUPA_PROGRESS && cmtAuthed()){
     if(!CMT.ready && !(await cmtInit())) throw new Error('评论服务不可用');
     await cmtApi('/api/progress',{method:'POST',body:{data:payload}});
     setCloudState('已上传 '+new Date().toLocaleTimeString());
@@ -1574,24 +1574,199 @@ async function cmtResolveBase(){
   }
   return '';
 }
-async function cmtInit(){
-  if(CMT.ready) return true;
-  try{ const r=await fetch('/api/health',{cache:'no-store'}); if(r.ok){ CMT.base=''; CMT.ready=true; CMT.addrSrc='same-origin'; return true; } }catch(e){}
-  const base=await cmtResolveBase();
-  if(base){ CMT.base=base; CMT.ready=true; return true; }
-  return false;
+/* ==========================================================================
+ * Supabase 适配层 —— 替换 冲刺刷题3.html 里的 cmtInit() 和 cmtApi()（含前面新增的辅助函数）
+ *
+ * 为什么这样写：页面里 40 多处调用点全是 cmtApi('/api/xxx', ...)，
+ * 只要 cmtApi 保持同样的 (path, opt) 签名、返回同样的 JSON 结构，
+ * 业务代码一行都不用改。所有 /api/* 在这里被翻译成 Supabase Auth / REST / RPC。
+ * ========================================================================== */
+
+/* ---- ① 填你自己的项目地址和 anon key（anon key 是公开的，可以放在页面里） ---- */
+const SUPA = {
+  url: 'https://aqskipwcuevcptmeqnlq.supabase.co',   // ← Project URL
+  key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxc2tpcHdjdWV2Y3B0bWVxbmxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ2NzQzMTksImV4cCI6MjExMDI1MDMxOX0._IgLOcHjMNALZ1qKIkZ8RHsxaKzEjPn2d7t1qAz_WAQ'                       // ← anon public key（不是 service_role！）
+};
+const SUPA_MAIL = 'n27cmt.com';               // 伪邮箱域名，和后端 migrate.py 一致
+
+/* 是否把学习进度（成绩/错题/收藏）也放到 Supabase。
+   false = 只同步评论，进度继续走原来的 GitHub records/<同步码>.json 方案（省流量）
+   用 patch_frontend.py --no-progress 会自动改成 false */
+var SUPA_PROGRESS = false;
+
+/* 昵称 → 登录邮箱：u + utf8hex(nick) + @example.com
+   不用 crypto.subtle，因为手机用 http://192.168.x.x 访问时那不是安全上下文会报错 */
+function supaEmail(nick){
+  const s = String(nick || '').trim();
+  let hex = '';
+  new TextEncoder().encode(s).forEach(function (b) { hex += b.toString(16).padStart(2, '0'); });
+  return 'u' + hex + '@' + SUPA_MAIL;
 }
-async function cmtApi(path, opt){
-  opt=opt||{};
-  const h={'Content-Type':'application/json'};
-  if(CMT.user&&CMT.user.token) h.Authorization='Bearer '+CMT.user.token;
-  const r=await fetch(cmtUrl(path),{method:opt.method||'GET',headers:h,
-    body:opt.body?JSON.stringify(opt.body):undefined, cache:'no-store'});
-  let j={}; try{ j=await r.json(); }catch(e){}
-  if(!r.ok) throw new Error(j.err||('HTTP '+r.status));
+
+/* ---- ② 原本机后端调用（保留：电脑开着 / 局域网时仍然走它，最快） ---- */
+async function localApi(path, opt){
+  opt = opt || {};
+  const h = { 'Content-Type': 'application/json' };
+  if (CMT.user && CMT.user.token) h.Authorization = 'Bearer ' + CMT.user.token;
+  const r = await fetch(cmtUrl(path), {
+    method: opt.method || 'GET', headers: h,
+    body: opt.body ? JSON.stringify(opt.body) : undefined, cache: 'no-store'
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.err || ('HTTP ' + r.status));
   return j;
 }
 
+/* ---- ③ Supabase 底层：Auth 请求（不带 Bearer）、REST 请求（带 Bearer + 401 自动刷新） ---- */
+async function supaAuth(path, body){
+  const r = await fetch(SUPA.url + '/auth/v1' + path, {
+    method: 'POST',
+    headers: { apikey: SUPA.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}), cache: 'no-store'
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) {
+    // GoTrue 的报错字段五花八门，统一翻成人话
+    const msg = j.msg || j.message || j.error_description || j.error || ('HTTP ' + r.status);
+    if (/already registered|already exists/i.test(msg)) throw new Error('这个昵称已被占用');
+    if (/invalid login credentials|invalid_grant/i.test(msg)) throw new Error('昵称或口令不对');
+    if (/password/i.test(msg) && /least|short|6/i.test(msg)) throw new Error('口令至少 6 位');
+    throw new Error(msg);
+  }
+  return j;
+}
+
+async function supaRefresh(){
+  const u = CMT.user;
+  if (!u || !u.refresh) return false;
+  try {
+    const j = await supaAuth('/token?grant_type=refresh_token', { refresh_token: u.refresh });
+    u.token = j.access_token; u.refresh = j.refresh_token || u.refresh;
+    u.exp = Date.now() + (j.expires_in || 3600) * 1000;
+    if (j.user && j.user.id) u.uid = j.user.id;
+    cmtSaveUser(u);
+    return true;
+  } catch (e) { return false; }
+}
+
+async function supaRpc(fn, args, retried){
+  const h = { 'Content-Type': 'application/json', apikey: SUPA.key };
+  if (CMT.user && CMT.user.token) h.Authorization = 'Bearer ' + CMT.user.token;
+  const r = await fetch(SUPA.url + '/rest/v1/rpc/' + fn, {
+    method: 'POST', headers: h, body: JSON.stringify(args || {}), cache: 'no-store'
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  // access token 默认 1 小时过期 → 401 时用 refresh_token 续一次再重试
+  if (r.status === 401 && !retried && await supaRefresh()) return supaRpc(fn, args, true);
+  if (!r.ok) throw new Error(j.message || j.hint || j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+/* ---- ④ 新版 cmtInit：同源 → 隧道（复用页面的 cmtResolveBase）→ Supabase ---- */
+async function cmtInit(){
+  if (CMT.ready) return true;
+  const _fj = (typeof cmtFetchJson === 'function')
+    ? cmtFetchJson
+    : function (u, ms) { return fetch(u, { cache: 'no-store' }); };
+
+  // 1) 同源本机后端（局域网 / 电脑开着）—— 最快，保留双活
+  try {
+    const r = await _fj('/api/health', 4000);
+    if (r.ok) { CMT.base = ''; CMT.mode = 'local'; CMT.addrSrc = 'same-origin'; CMT.ready = true; return true; }
+  } catch (e) {}
+
+  // 2) 公网隧道（api.json，由 tunnel.py 写入）—— 先探活再切，避免挂在 502 上
+  //    地址解析复用页面已有的 cmtResolveBase()：api.github.com 实时 → raw → Pages，带超时
+  try {
+    if (typeof cmtResolveBase === 'function') {
+      const base = await cmtResolveBase();
+      if (base) {
+        try {
+          const h = await _fj(base + '/api/health', 6000);
+          if (h.ok) { CMT.base = base; CMT.mode = 'local'; CMT.ready = true; return true; }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  // 3) Supabase（电脑关机也能用）
+  if (SUPA.url && SUPA.key && SUPA.url.indexOf('xxxx') < 0) {
+    CMT.base = SUPA.url; CMT.mode = 'supa'; CMT.ready = true; return true;
+  }
+  return false;
+}
+
+/* ---- ⑤ 新版 cmtApi：签名不变，内部路由 ---- */
+async function cmtApi(path, opt){
+  opt = opt || {};
+  if (!CMT.ready) await cmtInit();
+  if (CMT.mode !== 'supa') return localApi(path, opt);
+
+  const method = (opt.method || 'GET').toUpperCase();
+  const b = opt.body || {};
+  let m, j, s;
+
+  /* --- 账号 --- */
+  if (path === '/api/reg' || path === '/api/login') {
+    const nick = String(b.nick || '').trim();
+    const pass = String(b.pass || '');
+    const email = supaEmail(nick);
+    if (path === '/api/reg') {
+      if (nick.length < 2 || nick.length > 16) throw new Error('昵称 2–16 位');
+      if (pass.length < 6) throw new Error('口令至少 6 位');
+      j = await supaAuth('/signup', { email: email, password: pass, data: { nick: nick } });
+      s = j.session || (j.access_token ? j : null);
+      if (!s) throw new Error('注册成功但没拿到登录态：请到 Supabase → Authentication → Providers → Email 关闭 Confirm email');
+    } else {
+      j = await supaAuth('/token?grant_type=password', { email: email, password: pass });
+      s = j;
+    }
+    const uid = (s.user && s.user.id) || '';
+    const nm = (s.user && s.user.user_metadata && s.user.user_metadata.nick) || nick;
+    cmtSaveUser({ token: s.access_token, refresh: s.refresh_token, uid: uid, nick: nm,
+                  exp: Date.now() + (s.expires_in || 3600) * 1000 });
+    return { ok: true, token: s.access_token, uid: uid, nick: nm };
+  }
+  if (path === '/api/nick') {
+    j = await supaRpc('set_nick', { p_nick: String(b.nick || '').trim() });
+    return { ok: true, nick: j.nick };
+  }
+  if (path === '/api/pass') {
+    const u = CMT.user; if (!u || !u.token) throw new Error('请先登录');
+    const r = await fetch(SUPA.url + '/auth/v1/user', {
+      method: 'PUT',
+      headers: { apikey: SUPA.key, Authorization: 'Bearer ' + u.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: String(b.new || '') }), cache: 'no-store'
+    });
+    let e = {}; try { e = await r.json(); } catch (x) {}
+    if (!r.ok) throw new Error(e.msg || e.message || '改密码失败（新口令至少 6 位）');
+    return { ok: true, token: u.token, uid: u.uid, nick: u.nick };
+  }
+
+  /* --- 读 --- */
+  if (path === '/api/health') return supaRpc('health', {});
+  if ((m = path.match(/^\/api\/c\/([\w@.-]{1,60})$/)) && method === 'GET')
+    return supaRpc('list_comments', { p_tid: m[1] });
+  if (path === '/api/suggest') return supaRpc('list_comments', { p_tid: '@suggest' });
+  if (path === '/api/progress' && method === 'GET') return supaRpc('get_progress', {});
+  if ((m = path.match(/^\/api\/mine\/([\w@.-]{1,60})$/)))
+    return { ok: true, me: CMT.user ? null : null };
+
+  /* --- 写 --- */
+  if (path === '/api/c' && method === 'POST')
+    return supaRpc('post_comment', { p_tid: String(b.tid || ''), p_text: String(b.text || ''),
+                                     p_reply_to: b.reply_to || null });
+  if ((m = path.match(/^\/api\/c\/([\w.-]{1,60})$/)) && method === 'DELETE')
+    return supaRpc('del_comment', { p_cid: m[1] });
+  if (path === '/api/r')
+    return supaRpc('react', { p_cid: b.cid, p_kind: b.kind, p_act: b.act || null });
+  if (path === '/api/pin')
+    return supaRpc('set_pins', { p_tid: b.tid, p_order: Array.isArray(b.order) ? b.order : [] });
+  if (path === '/api/progress' && method === 'POST')
+    return supaRpc('put_progress', { p_data: b.data });
+
+  throw new Error('未知接口 ' + path);
+}
 /* ---------- 挂载到题目下方 ---------- */
 function cmtMount(tid){
   const w=document.getElementById('qwrap'); if(!w) return;
@@ -1910,7 +2085,7 @@ async function cmtAuth(kind){
   try{
     const j=await cmtApi('/api/'+(kind==='reg'?'reg':'login'),{method:'POST',body:{nick:nick,pass:pass}});
     cmtSaveUser({token:j.token,uid:j.uid,nick:j.nick});
-    cloudBindUser(j.uid);   // 评论账号 = 同步账号：登录后自动绑定同步码
+    if(SUPA_PROGRESS) cloudBindUser(j.uid);
     if(document.getElementById('uc').classList.contains('on')) ucRender();
     await cmtRefresh(false);
   }catch(e){ alert(e.message); }
