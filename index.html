@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>冲刺模考 · 工作台</title>
+<style>
+:root{
+  --bg:#f2f4f7; --card:#fff; --line:#e6e9ee; --text:#1b1f26; --muted:#8b93a1;
+  --pri:#0866ff; --pri-soft:#eaf1ff; --ok:#0fa968; --ok-soft:#e9f9f1;
+  --no:#e5484d; --no-soft:#fdecec; --warn:#e08a00; --warn-soft:#fff6e6;
+  --note:#8b5cf6; --note-soft:#f3eeff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#d3d8e0;border-radius:4px}
+
+/* 顶栏 */
+.topbar{flex:0 0 54px;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--card);border-bottom:1px solid var(--line);z-index:30}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15.5px;white-space:nowrap}
+.logo i{width:25px;height:25px;border-radius:7px;background:linear-gradient(135deg,#0866ff,#4d9bff);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-style:normal;font-weight:800}
+.search{flex:1;max-width:380px;display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 11px}
+.search:focus-within{border-color:var(--pri);background:#fff}
+.search input{flex:1;border:none;outline:none;background:none;font-size:13.5px}
+.seg{display:flex;background:var(--bg);border-radius:8px;padding:3px;gap:2px}
+.seg button{padding:4px 12px;border-radius:6px;font-size:12.5px;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--pri);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.spacer{flex:1}
+.hstat{display:flex;gap:14px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.hstat b{color:var(--text);font-size:13.5px}
+
+/* 布局 */
+.layout{flex:1;display:flex;min-height:0}
+.side{flex:0 0 290px;background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.side-nav{display:flex;gap:1px;padding:8px 8px 5px;border-bottom:1px solid var(--line)}
+.side-nav button{flex:1;padding:6px 2px;border-radius:7px;font-size:11.5px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+.side-nav button:hover{background:var(--bg)}
+.side-nav button.on{background:var(--pri-soft);color:var(--pri);font-weight:600}
+.side-nav svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9}
+.side-body{flex:1;overflow-y:auto;padding:6px 8px 24px}
+.side-title{font-size:11px;font-weight:700;color:#a3aab6;letter-spacing:.5px;padding:9px 6px 5px;text-transform:uppercase}
+.li{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;transition:.1s}
+.li:hover{background:var(--bg)}
+.li.on{background:var(--pri-soft);color:var(--pri);font-weight:600}
+.li .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .c{font-size:11px;color:var(--muted);flex:0 0 auto}
+.li.lv1{font-weight:700;font-size:13.5px}
+.li.lv2{font-weight:600;padding-left:16px}
+.li.lv3{padding-left:28px;color:#4a5160}
+.li.lv4{padding-left:40px;font-size:12.5px;color:#5b6270}
+.li .tw{flex:0 0 12px;color:#b8bfca;font-size:10px;transition:transform .15s}
+.li .tw.open{transform:rotate(90deg)}
+.li .bar{width:30px;height:4px;border-radius:2px;background:var(--line);overflow:hidden;flex:0 0 auto}
+.li .bar i{display:block;height:100%;background:var(--pri)}
+.back-link{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);padding:6px 6px 3px;cursor:pointer}
+.back-link:hover{color:var(--pri)}
+
+/* 中栏 */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg);position:relative}
+.main-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:9px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+.main-head .where{flex:1;min-width:0;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.main-head .where b{color:var(--text);font-weight:600}
+.pbar{flex:0 0 110px;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--pri);transition:width .2s}
+.qwrap{flex:1;overflow-y:auto;padding:18px 20px 26px}
+.qcard{max-width:840px;margin:0 auto}
+.q-meta{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--pri-soft);color:var(--pri)}
+.tag.gray{background:#f0f2f5;color:#6b7280}
+.tag.g{background:var(--ok-soft);color:var(--ok)}
+.tag.r{background:var(--no-soft);color:var(--no)}
+.tag.o{background:var(--warn-soft);color:var(--warn)}
+.tag.n{background:var(--note-soft);color:var(--note)}
+.kdlink{font-size:12px;color:var(--muted);cursor:pointer;border-bottom:1px dashed #ccd3de}
+.kdlink:hover{color:var(--pri);border-color:var(--pri)}
+.q-title{font-size:17px;line-height:1.7;font-weight:500;margin-bottom:16px;letter-spacing:.2px;position:relative;padding-right:34px}
+.nbtn{position:absolute;right:0;top:0;width:28px;height:28px;border-radius:8px;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.5;transition:.13s;border:1px solid transparent;cursor:pointer}
+.nbtn:hover{opacity:1;background:var(--note-soft);border-color:#ddd0ff}
+.nbtn.has{opacity:1;background:var(--note-soft);color:var(--note);border-color:#ddd0ff}
+.opts{display:flex;flex-direction:column;gap:9px}
+.opt{display:flex;gap:11px;align-items:flex-start;padding:11px 12px 11px 14px;background:var(--card);border:1.5px solid var(--line);border-radius:9px;transition:.13s;text-align:left;width:100%;position:relative;cursor:pointer}
+.opt:hover{border-color:#b9c6e4;background:#fbfcff}
+.opt .k{flex:0 0 22px;height:22px;border-radius:50%;border:1.5px solid #ccd3de;color:#98a0ad;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.opt .v{flex:1;font-size:14.8px;line-height:1.55;color:#2a2f38}
+.opt .o-nbtn{flex:0 0 26px;height:26px;border-radius:7px;font-size:13px;display:flex;align-items:center;justify-content:center;opacity:.42;transition:.13s;border:1px solid transparent;cursor:pointer}
+.opt .o-nbtn:hover{opacity:1;background:var(--note-soft);border-color:#ddd0ff}
+.opt .o-nbtn.has{opacity:1;background:var(--note-soft);color:var(--note);border-color:#ddd0ff}
+.opt.sel{border-color:var(--pri);background:var(--pri-soft)}
+.opt.sel .k{background:var(--pri);border-color:var(--pri);color:#fff}
+.opt.ok{border-color:var(--ok);background:var(--ok-soft)}
+.opt.ok .k{background:var(--ok);border-color:var(--ok);color:#fff}
+.opt.no{border-color:var(--no);background:var(--no-soft)}
+.opt.no .k{background:var(--no);border-color:var(--no);color:#fff}
+.multi-tip{font-size:11.5px;color:var(--warn);background:var(--warn-soft);padding:3px 8px;border-radius:5px;display:inline-block;margin-bottom:9px}
+
+/* 工具条 */
+.tools{flex:0 0 auto;display:flex;justify-content:center;padding:9px 20px;background:var(--card);border-top:1px solid var(--line)}
+.tools-inner{width:100%;max-width:840px;display:flex;align-items:center;gap:7px}
+.btn{height:36px;padding:0 14px;border-radius:8px;background:var(--bg);font-size:13.5px;display:inline-flex;align-items:center;gap:5px;transition:.12s;border:1px solid transparent}
+.btn:hover{background:#e9ecf1}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.pri{background:var(--pri);color:#fff}.btn.pri:hover{background:#0057dd}
+.btn.line{border-color:var(--line);background:var(--card)}.btn.line:hover{background:var(--bg)}
+.btn.danger{background:var(--no-soft);color:var(--no)}
+.btn.danger:hover{background:#fbdcdc}
+.btn.ok{background:var(--ok);color:#fff}
+.tools .grow{flex:1}
+.tools .pos{font-size:12.5px;color:var(--muted);min-width:60px}
+.tools .pos b{color:var(--text);font-size:14px}
+.swipetip{font-size:10px;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 3px;margin-left:2px;font-weight:400}
+@media (hover:hover){.swipetip{display:none}}
+kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:#8b93a1}
+
+/* 右栏 */
+.detail{flex:0 0 380px;background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.detail-head{flex:0 0 auto;padding:11px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700}
+.detail-body{flex:1;overflow-y:auto;padding:14px 16px 40px}
+.d-sec{margin-bottom:16px}
+.d-sec h4{font-size:11px;font-weight:700;color:#a3aab6;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.ans-row{display:flex;gap:8px}
+.ans-box{flex:1;background:var(--bg);border-radius:8px;padding:9px 11px}
+.ans-box .lbl{font-size:10.5px;color:var(--muted);margin-bottom:1px}
+.ans-box .val{font-size:18px;font-weight:800;letter-spacing:1px}
+.ans-box.ok .val{color:var(--ok)}.ans-box.no .val{color:var(--no)}
+.ex-text{font-size:13.5px;line-height:1.78;color:#3a404b;white-space:pre-wrap;word-break:break-word}
+.mantra{background:linear-gradient(135deg,#f6f3ff,#edf3ff);border:1px solid #e0e6ff;border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.mantra .mh{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#6248d6;margin-bottom:5px}
+.mantra .mt{font-size:13.2px;line-height:1.72;color:#2b2f3a;white-space:pre-wrap}
+.mantra.disc{background:linear-gradient(135deg,#fff9f2,#fff3e8);border-color:#ffe2c4}
+.mantra.disc .mh{color:#c97a00}
+.rel-list .li{font-size:12.5px;padding:5px 7px;align-items:flex-start}
+.rel-list .li .t{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.45}
+.empty-detail{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#c2c8d2;font-size:12.5px;gap:8px;text-align:center;padding:24px}
+
+/* 笔记弹层 */
+.npop{position:absolute;z-index:80;width:340px;background:var(--card);border:1px solid #ddd0ff;border-radius:12px;box-shadow:0 16px 40px rgba(30,20,60,.18);padding:12px;display:none}
+.npop.on{display:block}
+.npop .nh{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--note);margin-bottom:7px}
+.npop .nh span{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400;cursor:pointer}
+.npop textarea{width:100%;height:110px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;line-height:1.65;resize:vertical;outline:none}
+.npop textarea:focus{border-color:var(--note);box-shadow:0 0 0 3px rgba(139,92,246,.1)}
+.npop .nf{display:flex;gap:7px;margin-top:8px}
+.npop .nf .btn{height:31px;font-size:12.5px;padding:0 12px}
+.npop .nf .del{color:var(--no);margin-left:auto}
+
+/* 答题卡 */
+.sheet-mask{position:fixed;inset:0;background:rgba(16,24,40,.4);z-index:50;opacity:0;pointer-events:none;transition:.16s}
+.sheet-mask.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:92vw;background:var(--card);z-index:51;transform:translateX(100%);transition:transform .2s;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.sheet-hd{flex:0 0 auto;padding:14px 18px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.sheet-hd h3{font-size:15px;font-weight:700}
+.sheet-hd .x{margin-left:auto;font-size:19px;color:var(--muted);cursor:pointer;line-height:1}
+.sheet-bd{flex:1;overflow-y:auto;padding:14px 18px 28px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-bottom:14px}
+.grid b{height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;background:var(--bg);color:#6b7280;cursor:pointer;border:1.5px solid transparent;position:relative}
+.grid b:hover{border-color:#c9d3e6}
+.grid b.done{background:var(--pri-soft);color:var(--pri)}
+.grid b.cur{border-color:var(--pri)}
+.grid b.ok{background:var(--ok-soft);color:var(--ok)}
+.grid b.no{background:var(--no-soft);color:var(--no)}
+.grid b .d{position:absolute;right:3px;top:2px;width:5px;height:5px;border-radius:50%;background:var(--note)}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.legend .l1::before{background:var(--pri-soft);border:1px solid var(--pri)}
+.legend .l2::before{background:var(--ok-soft);border:1px solid var(--ok)}
+.legend .l3::before{background:var(--no-soft);border:1px solid var(--no)}
+.legend .l4::before{background:var(--bg)}
+.legend .l5::before{background:var(--note);border-radius:50%}
+
+/* 交卷 */
+.modal{position:fixed;inset:0;background:rgba(16,24,40,.5);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-card{background:var(--card);border-radius:14px;width:400px;max-width:100%;padding:26px;text-align:center;box-shadow:0 20px 50px rgba(16,24,40,.25)}
+.modal-card .score{font-size:44px;font-weight:800;line-height:1;background:linear-gradient(135deg,#0866ff,#4d9bff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.modal-card .score small{font-size:15px;font-weight:600;color:var(--muted);-webkit-text-fill-color:var(--muted)}
+.modal-card .sub{color:var(--muted);font-size:12.5px;margin-top:7px}
+.modal-stats{display:flex;justify-content:center;gap:24px;margin:18px 0 20px}
+.modal-stats div{font-size:11.5px;color:var(--muted)}
+.modal-stats b{display:block;font-size:18px;color:var(--text)}
+.modal-stats .g b{color:var(--ok)}.modal-stats .r b{color:var(--no)}
+.modal-actions{display:flex;gap:9px}
+.modal-actions .btn{flex:1;justify-content:center;height:40px}
+
+.empty{padding:34px 16px;text-align:center;color:#b3bac5;font-size:12.5px}
+.loading{display:flex;align-items:center;justify-content:center;height:100%;gap:9px;color:var(--muted)}
+.spin{width:17px;height:17px;border:2.5px solid var(--line);border-top-color:var(--pri);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+@media (max-width:1240px){.detail{flex:0 0 320px}.hstat{display:none}}
+@media (max-width:1040px){.detail{display:none}.side{flex:0 0 250px}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo"><i>冲</i>冲刺模考 <span style="font-size:10.5px;font-weight:500;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 4px">离线版</span><span id="verTag" style="font-size:10.5px;color:#b8bfca;font-weight:400"></span></div>
+  <div class="search">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#98a0ad" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    <input id="gsearch" placeholder="搜索题目 / 考点 / 口诀…" oninput="globalSearch(this.value)">
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" id="modeseg">
+    <button data-m="practice" class="on" onclick="setMode('practice')">练习</button>
+    <button data-m="exam" onclick="setMode('exam')">考试</button>
+  </div>
+  <div class="hstat" id="hstat"></div>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="side-nav">
+      <button data-nav="sets" class="on" onclick="switchNav('sets')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg><span>套卷</span></button>
+      <button data-nav="tree" onclick="switchNav('tree')"><svg viewBox="0 0 24 24"><path d="M4 6h6M4 12h10M4 18h6"/><circle cx="17" cy="6" r="2"/><circle cx="17" cy="18" r="2"/></svg><span>考点</span></button>
+      <button data-nav="mantras" onclick="switchNav('mantras')"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.4.3.5.7.5 1.1v1h6v-1c0-.4.1-.8.5-1.1A6 6 0 0012 3z"/></svg><span>口诀</span></button>
+      <button data-nav="notes" onclick="switchNav('notes')"><svg viewBox="0 0 24 24"><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5"/><path d="M8 13h8M8 17h5"/></svg><span>笔记</span></button>
+      <button data-nav="record" onclick="switchNav('record')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span>记录</span></button>
+    </div>
+    <div class="side-body" id="sidebody"></div>
+  </aside>
+
+  <main class="main">
+    <div class="main-head" id="mainhead"></div>
+    <div class="qwrap" id="qwrap"><div class="loading"><span class="spin"></span>加载题库…</div></div>
+    <div class="tools" id="tools" style="display:none"></div>
+  </main>
+
+  <aside class="detail">
+    <div class="detail-head">解析 <span id="dhead" style="margin-left:auto"></span></div>
+    <div class="detail-body" id="dbody"></div>
+  </aside>
+</div>
+
+<div class="npop" id="npop">
+  <div class="nh"><span id="npTitle">📝 笔记</span><span onclick="closeNote()">关闭 ×</span></div>
+  <textarea id="npText" placeholder="写点什么…（比如：为什么错 / 记忆点 / 和哪题混了）"></textarea>
+  <div class="nf">
+    <button class="btn pri" onclick="saveNote()">保存</button>
+    <button class="btn line" onclick="closeNote()">取消</button>
+    <button class="btn del" onclick="delNote()">删除</button>
+  </div>
+</div>
+
+<div class="sheet-mask" id="mask" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-hd"><h3 id="sheettitle">答题卡</h3><span class="x" onclick="closeSheet()">×</span></div>
+  <div class="sheet-bd" id="sheetbody"></div>
+</div>
+
+<script>
+/* ================= 数据 ================= */
+const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
+const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
+let store = { done:{}, wrong:{}, fav:{}, dk:{} };   // dk = 不会
+let notes = {};
+const S = { nav:'sets', mode:'practice', quiz:null, idx:0, answers:{}, revealed:{}, submitted:false,
+            sideBook:null, openTree:new Set(), editNote:null, qIndex:null, hist:[] };
+
+function save(){ try{localStorage.setItem(LS_STORE,JSON.stringify(store))}catch(e){} }
+function saveNotes(){ try{localStorage.setItem(LS_NOTE,JSON.stringify(notes))}catch(e){} }
+function load(){ try{const s=localStorage.getItem(LS_STORE); if(s) store=Object.assign(store,JSON.parse(s));}catch(e){}
+                 try{const n=localStorage.getItem(LS_NOTE); if(n) notes=JSON.parse(n)||{};}catch(e){} }
+
+/* ===== 远程同步（GitHub + jsDelivr） ===== */
+const SYNC = { repo:'linyunshen0-hue/n27-sync', branch:'main', baseUrl:'https://linyunshen0-hue.github.io/n27-sync' };   // 例：'linyunshen0-hue/n27-sync'
+function syncBase(){
+  if(SYNC.baseUrl) return SYNC.baseUrl.replace(/\/$/,'');
+  if(!SYNC.repo) return '';
+  return 'https://cdn.jsdelivr.net/gh/'+SYNC.repo+'@'+SYNC.branch;
+}
+
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open('cd27db',1);
+    r.onupgradeneeded=()=>{ try{r.result.createObjectStore('kv');}catch(e){} };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+function withTimeout(p, ms, fallback){
+  return Promise.race([p.catch(()=>fallback), new Promise(r=>setTimeout(()=>r(fallback), ms))]);
+}
+function idbGet(k){
+  return withTimeout((async()=>{
+    const db=await idbOpen();
+    return await new Promise((res,rej)=>{
+      const t=db.transaction('kv','readonly').objectStore('kv').get(k);
+      t.onsuccess=()=>res(t.result||null); t.onerror=()=>rej(t.error);
+    });
+  })(), 1500, null);
+}
+function idbSet(k,v){
+  return withTimeout((async()=>{
+    const db=await idbOpen();
+    return await new Promise((res,rej)=>{
+      const t=db.transaction('kv','readwrite').objectStore('kv').put(v,k);
+      t.onsuccess=()=>res(true); t.onerror=()=>rej(t.error);
+    });
+  })(), 4000, false);
+}
+async function gunzipBuf(buf){
+  const ds=new DecompressionStream('gzip');
+  return await new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
+}
+async function checkUpdate(){
+  const base=syncBase();
+  if(!base) return;
+  try{
+    const vr=await fetch(base+'/version.json?t='+Date.now(),{cache:'no-store'});
+    if(!vr.ok) return;
+    const v=await vr.json();
+    const cur=(DB.meta&&DB.meta.version)||'';
+    if(!v.version || v.version===cur) return;
+    const dr=await fetch(base+'/'+(v.file||'d.json.gz')+'?t='+Date.now(),{cache:'no-store'});
+    if(!dr.ok) return;
+    const txt=await gunzipBuf(await dr.arrayBuffer());
+    const nd=JSON.parse(txt);
+    await idbSet('data', nd);
+    showUpdateBar(nd.meta||v);
+  }catch(e){ console.warn('[sync] 检查更新失败', e); }
+}
+function showUpdateBar(m){
+  if(document.getElementById('upBar')) return;
+  const el=document.createElement('div');
+  el.id='upBar';
+  el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:9999;background:#0866ff;color:#fff;padding:8px 14px;border-radius:9px;font-size:13px;box-shadow:0 6px 20px rgba(8,102,255,.35);display:flex;gap:10px;align-items:center';
+  el.innerHTML=`<span>题库已更新到 ${esc(m.version||'')}（${m.total||''} 题）</span>
+    <button style="background:#fff;color:#0866ff;border:0;border-radius:6px;padding:3px 10px;font-size:12.5px;font-weight:600;cursor:pointer" onclick="location.reload()">刷新使用</button>
+    <span style="cursor:pointer;opacity:.75;font-size:15px" onclick="this.parentNode.remove()">×</span>`;
+  document.body.appendChild(el);
+}
+
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => (s||'').replace(/[^A-Za-z]/g,'').toUpperCase().split('').sort().join('');
+const isRight = (q,a) => a && a.length && norm(q.answer)===norm(a.join(''));
+const pct = (a,b)=> b?Math.round(a/b*100):0;
+
+/* ================= 考点索引 ================= */
+function buildIndex(){
+  const byKd = {};   // kaodian_id -> [tid]
+  const cnt = {};    // kaodian_id -> n（含子孙）
+  Object.entries(DB.questions).forEach(([t,q])=>{
+    const k=q.kaodian_id||'';
+    (byKd[k]=byKd[k]||[]).push(t);
+    if(k) cnt[k]=(cnt[k]||0)+1;
+  });
+  // 向上累加（按深度从深到浅，先子后父）
+  const depth=k=>{ let d=0,cur=k,seen=new Set(); while(cur&&DB.tree[cur]&&!seen.has(cur)){seen.add(cur);const p=DB.tree[cur][1];if(!p||!DB.tree[p])break;cur=p;d++;} return d; };
+  const deps={}; Object.keys(DB.tree).forEach(k=>deps[k]=depth(k));
+  Object.keys(DB.tree).sort((a,b)=>deps[b]-deps[a]).forEach(k=>{
+    const p=DB.tree[k][1];
+    if(p&&DB.tree[p]&&cnt[k]) cnt[p]=(cnt[p]||0)+cnt[k];
+  });
+  S.qIndex={byKd,cnt};
+}
+function kids(id){ return Object.keys(DB.tree).filter(k=>DB.tree[k][1]===id); }
+function rootOf(id){
+  let cur=id, seen=new Set();
+  while(cur && DB.tree[cur] && !seen.has(cur)){
+    seen.add(cur);
+    const p=DB.tree[cur][1];
+    if(!p || !DB.tree[p]) return cur;
+    cur=p;
+  }
+  return cur;
+}
+function sameKaodian(tid){
+  const q=DB.questions[tid];
+  if(!q||!q.kaodian_id) return [];
+  return (S.qIndex.byKd[q.kaodian_id]||[]).filter(t=>t!==tid);
+}
+
+/* ================= 数据加载（在线版：优先 IndexedDB 缓存） ================= */
+async function loadData(){
+  const cached=await idbGet('data');
+  if(cached && cached.meta) return cached;
+  const r=await fetch('冲刺题库/题库.json',{cache:'no-cache'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+
+/* ================= 启动 ================= */
+(async function boot(){
+  load();
+  try{
+    Object.assign(DB, await loadData());
+    const vt=document.getElementById('verTag');
+    if(vt&&DB.meta&&DB.meta.version) vt.textContent=DB.meta.version+' · '+DB.meta.total+'题';
+    buildIndex();
+    Object.keys(DB.tree).forEach(k=>{const p=DB.tree[k][1]; if(!p||!DB.tree[p]) S.openTree.add(k);});
+    renderAll(); bindKeys(); bindSwipe();
+    const _sp=new URLSearchParams(location.search);
+    if(_sp.get('synctest')) SYNC.baseUrl=_sp.get('synctest');
+    checkUpdate();
+    const h=(location.hash||'').slice(1);
+    if(location.search.indexOf('quiz')>=0){
+      startQuizBySet(0,0);
+      if(location.search.indexOf('note')>=0) setTimeout(()=>{ const b=document.querySelector('.q-title .nbtn'); if(b) b.click(); },200);
+    }
+    else if(h==='tree') switchNav('tree');
+    else if(h==='mantras') switchNav('mantras');
+    else if(h==='notes') switchNav('notes');
+    else if(h==='record') switchNav('record');
+  }catch(e){
+    document.getElementById('qwrap').innerHTML=`<div class="empty">题库加载失败：${esc(e.message)}<br><br>请用 <b>启动冲刺刷题.bat</b> 打开。</div>`;
+  }
+})();
+
+function renderAll(){ renderSide(); renderMain(); renderDetail(); renderHstat();
+  document.querySelectorAll('#modeseg button').forEach(b=>b.classList.toggle('on',b.dataset.m===S.mode)); }
+function renderHstat(){
+  const dn=Object.keys(store.done).length, okN=Object.values(store.done).filter(x=>x==='ok').length;
+  document.getElementById('hstat').innerHTML=
+    `<span>已刷 <b>${dn}</b>/${DB.meta.total}</span><span>正确率 <b>${dn?pct(okN,dn):0}%</b></span>
+     <span>错题 <b>${Object.keys(store.wrong).length}</b></span><span>笔记 <b>${Object.keys(notes).length}</b></span>`;
+}
+
+/* ================= 左栏 ================= */
+function switchNav(n){ S.nav=n; S.sideBook=null; closeNote();
+  document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===n));
+  renderSide(); }
+function renderSide(){
+  const el=document.getElementById('sidebody');
+  el.innerHTML = S.nav==='sets'?sideSets() : S.nav==='tree'?sideTree()
+             : S.nav==='mantras'?sideMantras() : S.nav==='notes'?sideNotes() : sideRecord();
+}
+function sideSets(){
+  if(S.sideBook!=null){
+    const b=DB.books[S.sideBook];
+    let h=`<div class="back-link" onclick="S.sideBook=null;renderSide()">‹ 返回书目</div><div class="side-title">${esc(b.name.replace('（已更新）',''))}</div>`;
+    b.sets.forEach((s,i)=>{
+      const n=s.items.filter(t=>store.done[t]).length;
+      const on=S.quiz&&S.quiz.title===b.name+' '+s.set;
+      h+=`<div class="li ${on?'on':''}" onclick="startQuizBySet(${S.sideBook},${i})">
+        <span class="t">${esc(s.set)}</span><span class="bar"><i style="width:${pct(n,s.count)}%"></i></span><span class="c">${n}/${s.count}</span></div>`;
+    });
+    return h;
+  }
+  let h='<div class="side-title">冲刺押题 · '+DB.books.length+' 本</div>';
+  DB.books.forEach((b,i)=>{
+    const done=b.sets.reduce((a,s)=>a+s.items.filter(t=>store.done[t]).length,0);
+    const total=b.sets.reduce((a,s)=>a+s.count,0);
+    h+=`<div class="li" onclick="S.sideBook=${i};renderSide()"><span class="t">${esc(b.name.replace('（已更新）',''))}</span>
+        <span class="c">${done}/${total}</span></div>`;
+  });
+  h+=`<div class="side-title">快速</div>
+      <div class="li" onclick="openSheet()"><span class="t">答题卡</span></div>`;
+  return h;
+}
+
+/* 考点树：科目 → 章 → 节 → 考点 */
+function sideTree(){
+  const roots=Object.keys(DB.tree).filter(k=>{const p=DB.tree[k][1];return !p||!DB.tree[p];});
+  let h=`<div class="side-title">考点树 · ${Object.keys(DB.tree).length} 节点</div>
+         <div class="li" onclick="S.openTree=new Set(Object.keys(DB.tree));renderSide()"><span class="t">全部展开</span></div>
+         <div class="li" onclick="S.openTree=new Set();renderSide()"><span class="t">全部折叠</span></div>`;
+  const walk=(id,lv)=>{
+    const [title]=DB.tree[id];
+    const c=S.qIndex.cnt[id]||0;
+    const ch=kids(id);
+    const open=S.openTree.has(id);
+    const byKd=(S.qIndex.byKd[id]||[]).length;
+    h+=`<div class="li lv${Math.min(lv,4)}" onclick="${ch.length?`toggleTree('${id}')`:''}">
+        <span class="tw ${open?'open':''}">${ch.length?'▶':''}</span>
+        <span class="t" title="${esc(title)}">${esc(title)}</span>
+        ${c?`<span class="c" style="color:var(--pri);font-weight:600" onclick="event.stopPropagation();killNode('${id}')">刷</span>`:''}
+        <span class="c">${c||''}</span></div>`;
+    if(ch.length&&open) ch.forEach(k=>walk(k,lv+1));
+  };
+  roots.filter(k=>(S.qIndex.cnt[k]||0)>0).forEach(k=>walk(k,1));
+  return h;
+}
+function toggleTree(id){ if(S.openTree.has(id)) S.openTree.delete(id); else S.openTree.add(id); renderSide(); }
+
+function sideMantras(){
+  const rows=[]; Object.entries(DB.mantras).forEach(([t,l])=>l.forEach(m=>rows.push({t,...m})));
+  rows.sort((a,b)=>(b.q-a.q)||(b.text.length-a.text.length));
+  const only3=S._only3!==false;
+  let h=`<div class="side-title">${rows.length} 条口诀</div>
+    <div class="li" onclick="S._only3=${!only3};renderSide()"><span class="t">${only3?'☑':'☐'} 只看 ★★★</span><span class="c">${rows.filter(r=>r.q===3).length}</span></div>`;
+  rows.filter(r=>!only3||r.q===3).slice(0,100).forEach(r=>{
+    h+=`<div class="li" onclick="openMantra('${r.t}')"><span class="t" style="font-size:12.3px;line-height:1.45;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(r.text)}</span><span class="c">${'★'.repeat(r.q)}</span></div>`;
+  });
+  return h;
+}
+
+function sideNotes(){
+  const keys=Object.keys(notes).filter(k=>noteText(k).trim());
+  if(!keys.length) return `<div class="side-title">笔记</div><div class="empty">还没有笔记<br><br>题干右上 📝 或选项右侧 📝 就能写</div>`;
+  let h=`<div class="side-title">${keys.length} 条笔记</div>
+    <div class="li" onclick="exportNotes()"><span class="t">⤓ 导出全部笔记</span></div>`;
+  keys.forEach(k=>{
+    const tid=k.split('|')[0], opt=k.split('|')[1];
+    const q=DB.questions[tid]||{};
+    const label=opt?`${tid} 选项${opt}`:tid;
+    h+=`<div class="li" onclick="jumpNote('${k}')" style="align-items:flex-start">
+      <span class="t" style="font-size:12.3px;line-height:1.5;white-space:normal">
+        <b style="color:var(--note)">${label}</b> ${opt?'':''}
+        <span style="display:block;color:#5b6270;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(noteText(k))}</span>
+        <span style="display:block;color:#a3aab6;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((q.kaodian||'').slice(0,18))}</span>
+      </span></div>`;
+  });
+  return h;
+}
+function noteText(k){ const v=notes[k]; return v&&typeof v==='object'? (v.text||'') : (v||''); }
+function jumpNote(k){
+  const tid=k.split('|')[0], opt=k.split('|')[1];
+  if(S.quiz){ S.hist.push({quiz:{ids:S.quiz.ids,title:S.quiz.title},idx:S.idx}); if(S.hist.length>30) S.hist.shift(); }
+  S.quiz={ids:[tid],title:'笔记关联题'}; S.idx=0; S.answers={}; S.revealed={[tid]:true}; S.submitted=false;
+  renderAll();
+  if(opt) setTimeout(()=>{ const btn=document.querySelector(`.opt[data-k="${opt}"] .o-nbtn`); if(btn) editNote(tid,'opt:'+opt,btn); },120);
+}
+
+function sideRecord(){
+  const dn=Object.keys(store.done).length, okN=Object.values(store.done).filter(x=>x==='ok').length;
+  const wr=Object.keys(store.wrong), fv=Object.keys(store.fav), dk=Object.keys(store.dk||{});
+  let h=`<div class="side-title">统计</div>
+    <div class="li"><span class="t">已刷</span><span class="c">${dn} / ${DB.meta.total}</span></div>
+    <div class="li"><span class="t">正确率</span><span class="c">${dn?pct(okN,dn):0}%</span></div>
+    <div class="side-title">错题本</div>`;
+  h+= wr.length?`<div class="li on" onclick="startQuiz(${esc(JSON.stringify(wr))},'错题本')"><span class="t">重刷错题</span><span class="c">${wr.length}</span></div>`
+              :`<div class="empty" style="padding:8px">还没有错题</div>`;
+  h+=`<div class="side-title">不会的题</div>`;
+  h+= dk.length?`<div class="li" onclick="startQuiz(${esc(JSON.stringify(dk))},'不会的题')"><span class="t">重刷「不会」</span><span class="c">${dk.length}</span></div>`
+              :`<div class="empty" style="padding:8px">刷题时点「不会」会收进来</div>`;
+  h+=`<div class="side-title">收藏</div>`;
+  h+= fv.length?`<div class="li" onclick="startQuiz(${esc(JSON.stringify(fv))},'我的收藏')"><span class="t">重刷收藏</span><span class="c">${fv.length}</span></div>`
+              :`<div class="empty" style="padding:8px">还没有收藏</div>`;
+  return h;
+}
+
+/* ================= 刷题 ================= */
+function startQuizBySet(bi,si){ const b=DB.books[bi],s=b.sets[si];
+  S.hist=[];                       // 从左侧选卷 = 新起点，清空返回栈
+  s.items.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; });  // 重刷：清这一套的旧作答
+  startQuiz(s.items, b.name.replace('（已更新）','')+' · '+s.set, null, true); }
+function startQuiz(ids,title,atTid,resetHist){
+  if(!ids||!ids.length) return;
+  if(!resetHist && S.quiz && (S.quiz.ids!==ids || S.quiz.title!==title)){
+    S.hist.push({quiz:{ids:S.quiz.ids,title:S.quiz.title}, idx:S.idx});
+    if(S.hist.length>30) S.hist.shift();
+  }
+  // 注意：不重置 answers/revealed —— 它们按 tid 全局存，串题/返回都不丢作答
+  S.quiz={ids:ids.slice(),title}; S.idx=atTid?Math.max(0,ids.indexOf(atTid)):0;
+  S.submitted=false; closeNote(); renderAll();
+}
+function backOne(){
+  closeNote(); closeSheet();
+  if(S.hist.length){ const p=S.hist.pop(); S.quiz=p.quiz; S.idx=p.idx; renderAll(); return; }
+  S.quiz=null; renderAll();
+}
+function openMantra(tid){
+  if(S.quiz){ S.hist.push({quiz:{ids:S.quiz.ids,title:S.quiz.title},idx:S.idx}); if(S.hist.length>30) S.hist.shift(); }
+  S.quiz={ids:[tid],title:'口诀关联题'}; S.idx=0; S.answers={}; S.revealed={[tid]:true}; S.submitted=false;
+  renderAll();
+}
+
+function renderMain(){
+  const head=document.getElementById('mainhead'), wrap=document.getElementById('qwrap'), tools=document.getElementById('tools');
+  if(!S.quiz){
+    head.innerHTML=''; tools.style.display='none';
+    wrap.innerHTML=`<div class="empty" style="padding-top:70px"><div style="font-size:32px;margin-bottom:10px">📘</div>
+      左侧选套卷 / 点考点开始<br><span style="color:#c2c8d2;font-size:12px">${DB.meta.sets} 套 · ${DB.meta.total} 题 · ${Object.keys(DB.mantras).length} 题带口诀</span></div>`;
+    return;
+  }
+  const ids=S.quiz.ids,i=S.idx,tid=ids[i],q=DB.questions[tid];
+  if(!q){ wrap.innerHTML='<div class="empty">题目不存在</div>'; return; }
+  const ans=S.answers[tid]||[];
+  const revealed = S.mode==='practice' ? ans.length>0 : !!S.revealed[tid];
+  const rel=sameKaodian(tid);
+
+  head.innerHTML=`<button class="btn line" style="height:29px;padding:0 10px;font-size:12.5px;flex:0 0 auto" onclick="backOne()"
+      title="返回上一级（Esc / 左右划）">← ${S.hist.length?'返回':'退出'}<span class="swipetip">划</span></button>
+    <div class="where"><b>${esc(S.quiz.title)}</b>${rel.length?`　
+      <span class="kdlink" onclick="sameGo('${tid}')">同考点还有 ${rel.length} 题 ›</span>`:''}</div>
+    <div class="pbar"><i style="width:${(i+1)/ids.length*100}%"></i></div>
+    <div style="font-size:12px;color:var(--muted);min-width:58px;text-align:right">${i+1} / ${ids.length}</div>`;
+
+  const keys=Object.keys(q.xuanxiang||{}).sort();
+  const stemNote=noteText(tid);
+
+  let h=`<div class="qcard"><div class="q-meta">
+      <span class="tag">${q.type==='多选'?'多选':'单选'}</span>
+      ${q.kaodian?`<span class="kdlink" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">${esc(q.kaodian)}</span>`:'<span class="tag gray">未标注考点</span>'}
+      <span class="spacer" style="flex:1"></span>
+      <span style="font-size:12px;cursor:pointer;color:${store.fav[tid]?'#e08a00':'#ccd3de'}" onclick="toggleFav('${tid}')">${store.fav[tid]?'★':'☆'}</span>
+    </div>
+    ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选完按 Enter 确认</div>':''}
+    <div class="q-title">${esc(q.title)}
+      <span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>
+    </div>
+    ${stemNote?`<div style="background:var(--note-soft);border-left:3px solid var(--note);border-radius:7px;padding:8px 11px;margin:-6px 0 14px;font-size:13px;line-height:1.65;color:#4b3a7a;white-space:pre-wrap">${esc(stemNote)}</div>`:''}
+    <div class="opts">`;
+  keys.forEach(k=>{
+    let cls='';
+    if(revealed){ if(q.answer.includes(k)) cls='ok'; else if(ans.includes(k)) cls='no'; }
+    else if(ans.includes(k)) cls='sel';
+    const nk=tid+'|'+k, has=noteText(nk);
+    h+=`<div class="opt ${cls}" data-k="${k}">
+      <span class="k" onclick="pick('${k}')">${k}</span>
+      <span class="v" onclick="pick('${k}')" style="cursor:pointer">${esc((q.xuanxiang[k]||'').replace(new RegExp('^'+k+'[.、．]\\s*'),''))}</span>
+      <span class="o-nbtn ${has?'has':''}" title="选项笔记" onclick="event.stopPropagation();editNote('${tid}','opt:${k}',this)">📝</span>
+    </div>
+    ${has?`<div style="margin:-4px 0 6px 30px;background:var(--note-soft);border-left:3px solid var(--note);border-radius:6px;padding:6px 10px;font-size:12.5px;line-height:1.6;color:#4b3a7a;white-space:pre-wrap">${esc(has)}</div>`:''}`;
+  });
+  h+='</div></div>';
+  wrap.innerHTML=h;
+
+  tools.style.display='flex';
+  tools.innerHTML=`<div class="tools-inner">
+    <button class="btn line" onclick="openSheet()">答题卡 ${Object.keys(S.answers).length}/${ids.length}</button>
+    <button class="btn" onclick="prev()" ${i===0?'disabled':''}>← 上一题</button>
+    <button class="btn" onclick="next()" ${i===ids.length-1?'disabled':''}>下一题 →</button>
+    <button class="btn danger" onclick="dontKnow()" title="标记不会，并直接刷同考点">😵 不会，刷同类</button>
+    <div class="grow"></div>
+    <span class="pos">第 <b>${i+1}</b> 题</span>
+    <button class="btn" onclick="revealNow()" ${revealed?'disabled':''}>看解析 <kbd>空格</kbd></button>
+    <button class="btn pri" onclick="submit()">交卷</button></div>`;
+}
+
+function pick(k){
+  if(S._swiped && Date.now()-S._swiped < 300) return;
+  const tid=S.quiz.ids[S.idx],q=DB.questions[tid];
+  let arr=S.answers[tid]||[];
+  if(q.type==='多选'){ arr=arr.includes(k)?arr.filter(x=>x!==k):arr.concat(k); }
+  else arr=[k];
+  S.answers[tid]=arr.sort();
+  if(S.mode==='practice'&&q.type!=='多选'){ S.revealed[tid]=true; rec(tid,arr); }
+  if(S.mode==='exam') S.revealed[tid]=false;
+  renderAll();
+}
+function rec(tid,arr){
+  const q=DB.questions[tid], ok=isRight(q,arr);
+  store.done[tid]= ok?'ok':'no';
+  if(ok){ delete store.wrong[tid]; delete (store.dk||{})[tid]; } else store.wrong[tid]=1;
+  save();
+}
+function dontKnow(){
+  if(!S.quiz) return;
+  const tid=S.quiz.ids[S.idx], q=DB.questions[tid];
+  store.dk=store.dk||{}; store.dk[tid]=1; store.wrong[tid]=1; store.done[tid]='no'; save();
+  const rel=sameKaodian(tid);
+  if(!rel.length){ alert('这个考点只有这一道题（题库里没有同类题）'); renderAll(); return; }
+  startQuiz(rel,'同考点：'+(q.kaodian||''));
+}
+function sameGo(tid){ const q=DB.questions[tid]||{}; startQuiz(sameKaodian(tid),'同考点：'+(q.kaodian||'')); }
+function killNode(id){
+  const out=[];
+  const walk=n=>{ (S.qIndex.byKd[n]||[]).forEach(t=>out.push(t)); kids(n).forEach(walk); };
+  walk(id);
+  if(!out.length) return;
+  const t=DB.tree[id]?DB.tree[id][0]:id;
+  startQuiz(out, '考点：'+t);
+}
+function killKaodian(kid){
+  if(!kid) return;
+  const ids=(S.qIndex.byKd[kid]||[]).slice();
+  if(!ids.length) return;
+  const q=DB.questions[ids[0]]||{};
+  startQuiz(ids, '考点：'+(q.kaodian||kid));
+}
+function openRel(fromTid, target){
+  const q=DB.questions[fromTid]||{};
+  const ids=sameKaodian(fromTid).slice();
+  startQuiz(ids, '同考点：'+(q.kaodian||''), target);
+}
+function revealNow(){ if(!S.quiz) return; S.revealed[S.quiz.ids[S.idx]]=true; renderAll(); }
+function prev(){ if(S.quiz&&S.idx>0){S.idx--;closeNote();renderAll();} }
+function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){S.idx++;closeNote();renderAll();} }
+function toggleFav(tid){ if(store.fav[tid]) delete store.fav[tid]; else store.fav[tid]=1; save(); renderAll(); }
+
+/* ================= 笔记 ================= */
+function editNote(tid, kind, anchor){
+  const key = kind==='stem' ? tid : tid+'|'+kind.split(':')[1];
+  S.editNote = key;
+  const pop=document.getElementById('npop');
+  document.getElementById('npTitle').textContent =
+    kind==='stem' ? '📝 题干笔记' : '📝 选项 '+kind.split(':')[1]+' 笔记';
+  document.getElementById('npText').value = noteText(key);
+  pop.classList.add('on');
+  const r=anchor.getBoundingClientRect();
+  const w=340, h=210;
+  let left=Math.min(window.innerWidth-w-16, Math.max(12, r.left-40));
+  let top=r.bottom+8;
+  if(top+h>window.innerHeight-10) top=Math.max(10, r.top-h-8);
+  pop.style.left=left+'px'; pop.style.top=top+'px';
+  setTimeout(()=>document.getElementById('npText').focus(),50);
+}
+function saveNote(){
+  const k=S.editNote, t=document.getElementById('npText').value.trim();
+  if(!k) return;
+  if(t) notes[k]={text:t, ts:Date.now()}; else delete notes[k];
+  saveNotes(); closeNote(); renderAll();
+}
+function delNote(){ if(S.editNote){ delete notes[S.editNote]; saveNotes(); closeNote(); renderAll(); } }
+function closeNote(){ S.editNote=null; document.getElementById('npop').classList.remove('on'); }
+function exportNotes(){
+  const keys=Object.keys(notes).filter(k=>noteText(k).trim());
+  if(!keys.length) return alert('还没有笔记');
+  let md=`# 冲刺模考 · 我的笔记\n> 导出 ${new Date().toLocaleString()} · 共 ${keys.length} 条\n\n`;
+  keys.forEach(k=>{
+    const [tid,opt]=k.split('|'); const q=DB.questions[tid]||{};
+    md+=`## ${tid}${opt?' · 选项 '+opt:''}\n`;
+    md+=`> ${(q.kaodian||'').slice(0,40)}\n\n`;
+    if(opt) md+=`**选项${opt}**：${(q.xuanxiang||{})[opt]||''}\n\n`;
+    md+=`${noteText(k)}\n\n---\n\n`;
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown;charset=utf-8'}));
+  a.download='冲刺模考笔记_'+new Date().toISOString().slice(0,10)+'.md'; a.click();
+}
+
+/* ================= 右栏 ================= */
+function renderDetail(){
+  const el=document.getElementById('dbody'), hd=document.getElementById('dhead');
+  if(!S.quiz){ hd.textContent=''; el.innerHTML=`<div class="empty-detail">选一道题开始</div>`; return; }
+  const tid=S.quiz.ids[S.idx], q=DB.questions[tid], ans=S.answers[tid]||[];
+  const revealed = S.mode==='practice' ? ans.length>0 : !!S.revealed[tid];
+  if(!revealed){
+    hd.textContent='';
+    el.innerHTML=`<div class="empty-detail">${S.mode==='exam'?'考试模式：交卷后显示':'选一个选项后自动显示'}<br><span style="font-size:11px;color:#d5dae2">按 空格 强制显示</span></div>`;
+    return;
+  }
+  const right=isRight(q,ans);
+  hd.innerHTML=`<span class="tag ${right?'g':'r'}">${right?'✓ 正确':'✗ 错误'}</span>`;
+  let h=`<div class="d-sec"><div class="ans-row">
+      <div class="ans-box ok"><div class="lbl">正确答案</div><div class="val">${esc(q.answer)}</div></div>
+      <div class="ans-box ${right?'ok':'no'}"><div class="lbl">你的答案</div><div class="val">${ans.join('')||'—'}</div></div></div></div>`;
+  h+=`<div class="d-sec"><h4>解析</h4><div class="ex-text">${esc(q.jiexi||'暂无解析')}</div></div>`;
+  const ms=DB.mantras[tid];
+  if(ms&&ms.length){
+    h+=`<div class="d-sec"><h4>口诀 / 辨析 <span style="color:#c2c8d2;font-weight:500">${ms.length}</span></h4>`;
+    ms.forEach(m=>{ h+=`<div class="mantra ${m.type==='辨析'?'disc':''}">
+      <div class="mh">${m.type==='口诀'?'🧠 口诀':'⚠️ 易错辨析'}<span style="margin-left:auto">${'★'.repeat(m.q)}</span></div>
+      <div class="mt">${esc(m.text)}</div></div>`; });
+    h+=`</div>`;
+  }
+  const rel=sameKaodian(tid);
+  if(rel.length){
+    h+=`<div class="d-sec"><h4>同考点题 <span style="color:#c2c8d2;font-weight:500">${rel.length}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--pri);cursor:pointer;font-weight:600;text-transform:none" onclick="sameGo('${tid}')">全部刷 ›</span></h4>
+      <div class="rel-list">`;
+    rel.slice(0,6).forEach(t=>{
+      const r=DB.questions[t];
+      h+=`<div class="li" onclick="openRel('${tid}','${t}')">
+        <span class="t">${esc((r.title||'').slice(0,52))}</span></div>`;
+    });
+    h+=`</div></div>`;
+  }
+  h+=`<div class="d-sec"><h4>出处</h4><div class="ex-text" style="color:var(--muted);font-size:12px">${esc(q.chuchu||'—')}</div></div>`;
+  el.innerHTML=h;
+}
+
+/* ================= 交卷 ================= */
+function submit(){
+  if(!S.quiz) return;
+  const ids=S.quiz.ids; let sc=0,full=0,okN=0,noN=0,blank=0;
+  ids.forEach(t=>{
+    const q=DB.questions[t], pt=q.type==='多选'?2:1; full+=pt;
+    const a=S.answers[t]||[];
+    if(!a.length){ blank++; store.done[t]='no'; store.wrong[t]=1; return; }
+    if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; delete store.wrong[t]; }
+    else { noN++; store.done[t]='no'; store.wrong[t]=1; }
+  });
+  save(); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML=`<div class="modal-card"><div class="score">${sc}<small> / ${full}</small></div>
+    <div class="sub">${esc(S.quiz.title)}</div>
+    <div class="modal-stats"><div class="g"><b>${okN}</b>正确</div><div class="r"><b>${noN}</b>错误</div><div><b>${blank}</b>未答</div></div>
+    <div class="modal-actions"><button class="btn line" onclick="this.closest('.modal').remove()">关闭</button>
+      <button class="btn pri" onclick="this.closest('.modal').remove();S.idx=0;renderAll()">逐题看解析</button></div></div>`;
+  m.onclick=e=>{ if(e.target===m) m.remove(); };
+  document.body.appendChild(m);
+}
+
+/* ================= 答题卡 ================= */
+function openSheet(){
+  if(!S.quiz) return;
+  const ids=S.quiz.ids;
+  document.getElementById('sheettitle').textContent=`答题卡 ${ids.length} 题`;
+  let h='<div class="grid">';
+  ids.forEach((t,j)=>{
+    const a=S.answers[t]||[]; let cls='';
+    if(S.submitted||S.revealed[t]||(S.mode==='practice'&&a.length)) cls=isRight(DB.questions[t],a)?'ok':'no';
+    else if(a.length) cls='done';
+    if(j===S.idx) cls+=' cur';
+    const hasN=noteText(t)||Object.keys(notes).some(k=>k.startsWith(t+'|'));
+    h+=`<b class="${cls}" onclick="jump(${j})">${j+1}${hasN?'<span class="d"></span>':''}</b>`;
+  });
+  h+=`</div><div class="legend"><span class="l1">已答</span><span class="l2">正确</span><span class="l3">错误</span><span class="l4">未答</span><span class="l5">有笔记</span></div>`;
+  document.getElementById('sheetbody').innerHTML=h;
+  document.getElementById('mask').classList.add('on'); document.getElementById('sheet').classList.add('on');
+}
+function closeSheet(){ document.getElementById('mask').classList.remove('on'); document.getElementById('sheet').classList.remove('on'); }
+function jump(j){ S.idx=j; closeSheet(); closeNote(); renderAll(); }
+
+/* ================= 模式 / 搜索 ================= */
+function setMode(m){ S.mode=m; renderAll(); }
+function globalSearch(kw){
+  kw=(kw||'').trim();
+  if(!kw) return;
+  const hits=[];
+  for(const [t,q] of Object.entries(DB.questions))
+    if(q.title.includes(kw)||(q.kaodian||'').includes(kw)) hits.push(t);
+  document.getElementById('sidebody').innerHTML=
+    `<div class="side-title">搜索「${esc(kw)}」· ${hits.length} 题</div>`+
+    (hits.length?`<div class="li on" onclick="startQuiz(${esc(JSON.stringify(hits))},'搜索：${esc(kw)}')"><span class="t">全部 ${hits.length} 题一起刷</span></div>`+
+      hits.slice(0,60).map(t=>{const q=DB.questions[t];
+        return `<div class="li" onclick="startQuiz(['${t}'],'搜索：${esc(kw)}')">
+          <span class="t" style="font-size:12.3px;line-height:1.45;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(q.title.slice(0,56))}</span></div>`;}).join('')
+      :'<div class="empty">没有匹配</div>');
+}
+
+/* ================= 键盘 ================= */
+/* ===== 触屏手势：边缘左右划 = 退出 / 中间左右划 = 翻题 ===== */
+function bindSwipe(){
+  let sx=0, sy=0, st=0, tracking=false;
+  const isField = el => el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable);
+
+  document.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1 || isField(e.target)){ tracking=false; return; }
+    sx=e.touches[0].clientX; sy=e.touches[0].clientY; st=Date.now(); tracking=true;
+  }, {passive:true});
+
+  document.addEventListener('touchmove', e=>{
+    if(!tracking) return;
+    // 垂直为主 → 交给页面滚动，不拦
+    const dy=Math.abs(e.touches[0].clientY-sy);
+    const dx=Math.abs(e.touches[0].clientX-sx);
+    if(dy>dx*1.2) tracking=false;
+  }, {passive:true});
+
+  document.addEventListener('touchend', e=>{
+    if(!tracking) return;
+    tracking=false;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-sx, dy=t.clientY-sy, dt=Date.now()-st;
+    if(dt>800) return;
+    if(Math.abs(dx)<55) return;
+    if(Math.abs(dy)>Math.abs(dx)*0.75) return;   // 斜划不算
+    const W=window.innerWidth;
+    const fromLeft = sx < Math.min(60, W*0.08);
+    const fromRight = sx > W - Math.min(60, W*0.08);
+
+    // 命中：从边缘向外划 → 退出 / 返回上一级
+    if((fromLeft && dx>0) || (fromRight && dx<0)){
+      S._swiped = Date.now();
+      e.preventDefault();
+      backOne();
+      return;
+    }
+    // 中间横划 → 翻题（有题组时）
+    if(S.quiz && Math.abs(dx)>90){
+      S._swiped = Date.now();
+      if(dx>0) prev(); else next();
+    }
+  }, {passive:false});
+}
+
+function bindKeys(){
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+    if(!S.quiz) return;
+    const q=DB.questions[S.quiz.ids[S.idx]];
+    const keys=Object.keys(q.xuanxiang||{}).sort();
+    const n='123456789'.indexOf(e.key);
+    if(n>=0&&n<keys.length){ e.preventDefault(); pick(keys[n]); return; }
+    const a='ABCDEFGHI'.indexOf(e.key.toUpperCase());
+    if(a>=0&&a<keys.length){ e.preventDefault(); pick(keys[a]); return; }
+    if(e.key==='Enter'||e.key==='ArrowRight'){
+      e.preventDefault();
+      const tid=S.quiz.ids[S.idx], ar=S.answers[tid]||[];
+      const rev=S.mode==='practice'?ar.length>0:!!S.revealed[tid];
+      if(ar.length&&!rev) revealNow(); else next(); return;
+    }
+    if(e.key==='ArrowLeft'){ e.preventDefault(); prev(); return; }
+    if(e.key===' '){ e.preventDefault(); revealNow(); return; }
+    if(e.key.toLowerCase()==='n'){ e.preventDefault(); const b=document.querySelector('.q-title .nbtn'); if(b) b.click(); return; }
+    if(e.key.toLowerCase()==='s'){ e.preventDefault(); submit(); return; }
+    if(e.key==='Escape'){
+      if(document.getElementById('npop').classList.contains('on')){ closeNote(); return; }
+      if(document.getElementById('sheet').classList.contains('on')){ closeSheet(); return; }
+      backOne(); return;
+    }
+  });
+  document.addEventListener('click',e=>{
+    const pop=document.getElementById('npop');
+    if(pop.classList.contains('on')&&!pop.contains(e.target)&&!e.target.classList.contains('nbtn')&&!e.target.classList.contains('o-nbtn')) closeNote();
+  });
+}
+</script>
+</body>
+</html>
