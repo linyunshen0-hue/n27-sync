@@ -1385,8 +1385,8 @@ function globalSearch(kw){
    - 排序：我点赞/收藏的置顶（可 ↑↓） > 全网 赞+收藏−踩 前 3 > 其余按当日种子随机曝光
    - 权限：只能删自己的评论（服务端 403 强制）
    - 列表本地缓存：先显示上次看到的，再后台刷新（服务没开也不会空白） */
-const LS_CMT='cd27_cmt_v1', LS_CMTC='cd27_cmtc_v1';
-const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null, draft:'', loading:false };
+const LS_CMT='cd27_cmt_v1', LS_CMTC='cd27_cmtc_v1', LS_CMTQ='cd27_cmtq_v1';
+const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null, draft:'', loading:false, q:[] };
 let _cmtCache={};
 
 function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null'); if(u&&u.token) CMT.user=u;}catch(e){} }
@@ -1400,6 +1400,14 @@ function cmtCacheSave(){
     localStorage.setItem(LS_CMTC, JSON.stringify(_cmtCache));
   }catch(e){}
 }
+/* ---- 离线待发队列：服务没开也能先发出去，等电脑开机后自动补发 ---- */
+function cmtQueueLoad(){ try{CMT.q=JSON.parse(localStorage.getItem(LS_CMTQ)||'[]'); if(!Array.isArray(CMT.q)) CMT.q=[];}catch(e){CMT.q=[];} }
+function cmtQueueSave(){ try{localStorage.setItem(LS_CMTQ,JSON.stringify(CMT.q||[]))}catch(e){} }
+function cmtQueueAdd(it){ CMT.q=CMT.q||[]; CMT.q.push(it); cmtQueueSave(); }
+function cmtQueueDel(id){ CMT.q=(CMT.q||[]).filter(function(x){return x.id!==id}); cmtQueueSave(); }
+function cmtPending(tid){ return (CMT.q||[]).filter(function(x){return x.tid===tid}); }
+function cmtQueueCount(){ return (CMT.q||[]).length; }
+
 function cmtUrl(p){ return CMT.base+p; }
 async function cmtInit(){
   if(CMT.ready) return true;
@@ -1474,7 +1482,11 @@ async function cmtRefresh(manual){
 }
 
 /* ---------- 渲染 ---------- */
-function cmtById(id){ for(let i=0;i<CMT.list.length;i++) if(CMT.list[i].id===id) return CMT.list[i]; return null; }
+function cmtById(id){
+  for(let i=0;i<CMT.list.length;i++) if(CMT.list[i].id===id) return CMT.list[i];
+  const q=CMT.q||[]; for(let i=0;i<q.length;i++) if(q[i].id===id) return q[i];
+  return null;
+}
 function cmtRender(){
   const list=document.getElementById('cmtList'), ft=document.getElementById('cmtFt'), nEl=document.getElementById('cmtN');
   if(!list||!ft) return;
@@ -1502,7 +1514,12 @@ function cmtRender(){
   others.sort(function(a,b){ return hh(a.id+seed)-hh(b.id+seed); });
 
   let h='';
-  if(!CMT.list.length) h+='<div class="cs-empty" style="padding:16px 6px">还没有人评论，来说第一句</div>';
+  const pend=cmtPending(CMT.tid);
+  if(pend.length){
+    h+='<div class="cs-sec">待同步 <b>'+pend.length+'</b><span style="text-transform:none;font-weight:400;color:#b3bac5">（电脑开机后自动发出）</span></div>';
+    pend.forEach(function(c){ h+=cmtPendingItem(c); });
+  }
+  if(!CMT.list.length && !pend.length) h+='<div class="cs-empty" style="padding:16px 6px">还没有人评论，来说第一句</div>';
   h+=chunk('我点赞 / 收藏的（可 ↑↓ 调顺序）', mine, 'mine');
   h+=chunk('热门前 3 · 赞＋收藏−踩', top, 'top');
   h+=chunk('全部评论 · 每天轮换曝光', others, '');
@@ -1545,6 +1562,18 @@ function cmtItem(c, zone, idx, total){
       +'<button class="cbtn up" '+(idx===total-1?'disabled':'')+' onclick="cmtPinMove('+q(c.id)+',1)">↓</button>':'')
     +'</div></div>';
 }
+function cmtPendingItem(c){
+  const d=new Date(c.ts);
+  const ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return '<div class="citem mine">'
+    +'<div class="cmeta"><span class="cnick">'+esc(c.nick)+'</span><span class="cbadge">我</span>'
+    +'<span class="cbadge" style="background:#fff6e6;color:#e08a00">待同步</span><span>'+ts+'</span></div>'
+    +'<div class="ctext">'+esc(c.text)+'</div>'
+    +'<div class="cact"><span class="sp"></span>'
+    +'<button class="cbtn del" onclick="cmtDelPending('+JSON.stringify(c.id)+')">删除</button></div></div>';
+}
+function cmtDelPending(id){ cmtQueueDel(id); cmtRender(); setCmtState('已删除待发评论'); }
+
 async function cmtReact(cid,kind){
   if(!CMT.user){ setCmtState('先登录再点赞'); return; }
   try{ await cmtApi('/api/r',{method:'POST',body:{cid:cid,kind:kind}}); await cmtRefresh(false); }
@@ -1573,16 +1602,70 @@ async function cmtPinMove(cid,dir){
     if(CMT.me) CMT.me.pin=cur; cmtRender(); }
   catch(e){ alert(e.message); }
 }
+function cmtOfflineErr(e){
+  // HTTP 4xx（除 404=隧道地址失效）算“服务端明确拒绝”，其余都当离线（留着等补发）
+  const m=/HTTP (\d+)/.exec(e&&e.message||'');
+  if(m && +m[1]>=400 && +m[1]<500 && +m[1]!==404) return false;
+  return true;
+}
 async function cmtSend(){
   const el=document.getElementById('cmtText'); const t=(el&&el.value||'').trim();
   if(!t) return;
   if(!CMT.user){ setCmtState('先登录'); return; }
+  const tid=CMT.tid, reply=CMT.replyTo;
+  const tmp={id:'local-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+             tid:tid, uid:CMT.user.uid, nick:CMT.user.nick, text:t, ts:Date.now(),
+             reply_to:reply, likes:0, dislikes:0, stars:0, pending:true};
+  cmtQueueAdd(tmp);
+  CMT.replyTo=null; CMT.draft=''; if(el) el.value='';
+  cmtRender();                      // 先显示出来，绝不让用户白写
   try{
-    await cmtApi('/api/c',{method:'POST',body:{tid:CMT.tid,text:t,reply_to:CMT.replyTo}});
-    CMT.replyTo=null; CMT.draft=''; if(el) el.value='';
+    await cmtApi('/api/c',{method:'POST',body:{tid:tid,text:t,reply_to:reply}});
+    cmtQueueDel(tmp.id);
+    setCmtState('');
     await cmtRefresh(false);
-  }catch(e){ alert(e.message); }
+  }catch(e){
+    if(!cmtOfflineErr(e)){          // 服务端明确拒绝（内容为空/未登录等）→ 撤回并提示
+      cmtQueueDel(tmp.id); cmtRender(); alert(e.message); return;
+    }
+    setCmtState('已存在本机，电脑开机后自动发出');
+    cmtScheduleFlush();
+  }
 }
+/* ---- 补发队列 ---- */
+let _flushing=false, _flushTimer=null;
+async function cmtFlushQueue(silent){
+  if(_flushing || !(CMT.q||[]).length) return 0;
+  if(!CMT.user || !CMT.user.token) return 0;      // 没登录不能代发
+  _flushing=true; let n=0;
+  try{
+    if(!CMT.ready && !(await cmtInit())) return 0;
+    const arr=(CMT.q||[]).slice();
+    for(let i=0;i<arr.length;i++){
+      const it=arr[i];
+      try{
+        await cmtApi('/api/c',{method:'POST',body:{tid:it.tid,text:it.text,reply_to:it.reply_to||null}});
+        cmtQueueDel(it.id); n++;
+      }catch(e){
+        const m=/HTTP (\d+)/.exec(e&&e.message||'');
+        if(m && (+m[1]===400 || +m[1]===409)){ cmtQueueDel(it.id); }   // 内容非法，丢弃这条
+        else break;                                                    // 离线/未登录，下次再试
+      }
+    }
+  }finally{ _flushing=false; }
+  if(n){
+    setCmtState('已补发 '+n+' 条');
+    if(CMT.tid) await cmtRefresh(false);
+    if(!silent) alert('已补发 '+n+' 条待发评论');
+  }
+  return n;
+}
+function cmtScheduleFlush(){
+  clearTimeout(_flushTimer);
+  _flushTimer=setTimeout(function(){ cmtFlushQueue(true); },6000);
+}
+setInterval(function(){ if(cmtQueueCount()) cmtFlushQueue(true); },60000);
+window.addEventListener('online', function(){ if(cmtQueueCount()) cmtFlushQueue(true); });
 async function cmtAuth(kind){
   const nickEl=document.getElementById('cmtNick'), passEl=document.getElementById('cmtPass');
   const nick=(nickEl&&nickEl.value||'').trim(), pass=(passEl&&passEl.value||'');
@@ -1679,7 +1762,7 @@ async function ucSaveNick(){
   }catch(e){ alert(e.message); }
 }
 /* 评论模块在 boot 之后，所以登录态/缓存在这里初始化（boot 里调用会撞 TDZ） */
-cmtLoadUser(); cmtCacheLoad();
+cmtLoadUser(); cmtCacheLoad(); cmtQueueLoad();
 
 async function ucSavePass(){
   if(!CMT.user) return;
