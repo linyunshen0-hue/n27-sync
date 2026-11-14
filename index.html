@@ -386,6 +386,36 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
   .modal-card .score{font-size:38px}
   .rec-tip{display:none}
 }
+/* ===== 折叠左侧目录（桌面/平板） ===== */
+#foldBtn{display:none;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#5b6270}
+@media (min-width:701px){#foldBtn{display:flex}}
+.side{transition:flex-basis .22s cubic-bezier(.4,0,.2,1),width .22s cubic-bezier(.4,0,.2,1),padding .22s}
+.side.fold{flex:0 0 0!important;width:0!important;min-width:0!important;padding-left:0;padding-right:0;overflow:hidden;border-right:0}
+/* ===== 居中确认框（替代原生 confirm） ===== */
+.mck{position:fixed;inset:0;background:rgba(16,24,40,.5);z-index:10060;display:none;align-items:center;justify-content:center;padding:20px}
+.mck.on{display:flex}
+.mck-b{background:#fff;border-radius:14px;width:400px;max-width:100%;padding:22px;text-align:center;box-shadow:0 20px 50px rgba(16,24,40,.25);animation:mpop .16s ease}
+@keyframes mpop{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}
+.mck-t{font-size:15px;font-weight:700;color:#1d2129;margin-bottom:10px}
+.mck-c{font-size:13px;color:#5b6270;line-height:1.7;white-space:pre-wrap;margin-bottom:20px}
+.mck-f{display:flex;gap:9px}
+.mck-f .btn{flex:1;justify-content:center;height:40px}
+/* ===== 切题滑动过渡 ===== */
+@keyframes slidL{from{transform:translateX(54px);opacity:.35}to{transform:none;opacity:1}}
+@keyframes slidR{from{transform:translateX(-54px);opacity:.35}to{transform:none;opacity:1}}
+#qwrap.slidL>.qcard{animation:slidL .26s cubic-bezier(.22,.7,.3,1)}
+#qwrap.slidR>.qcard{animation:slidR .26s cubic-bezier(.22,.7,.3,1)}
+/* ===== 错题本分组 / 首页数据卡 ===== */
+.wgrp{background:#fff;border:1px solid var(--line);border-radius:11px;margin:0 0 10px;overflow:hidden}
+.wgrp-h{display:flex;align-items:center;gap:8px;padding:10px 13px;background:#fafbfd;font-size:12.8px;font-weight:600}
+.wgrp-h:hover{background:#f5f8fd}
+.wgrp-h .c{margin-left:auto;font-weight:400;color:var(--muted);font-size:11.5px}
+.wgrp-h .go{color:var(--pri);font-weight:600;font-size:11.5px;cursor:pointer}
+.wrow{display:flex;gap:9px;align-items:baseline;padding:9px 13px;border-top:1px solid #f2f4f7;font-size:12.5px;cursor:pointer;line-height:1.5}
+.wrow:hover{background:#fafbfd}
+.wrow .n{flex:0 0 22px;color:#b3bac5;font-size:11px;text-align:right}
+.homegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}
+@media (max-width:700px){.homegrid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -393,6 +423,7 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 <header class="topbar">
   <button class="mobmenu" onclick="openDrawer()" aria-label="菜单"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   <div class="logo"><i>冲</i>冲刺模考 <span style="font-size:10.5px;font-weight:500;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 4px">离线版</span><span id="verTag" style="font-size:10.5px;color:#b8bfca;font-weight:400"></span></div>
+  <button class="mobmenu" id="foldBtn" onclick="setSideFold(!S.sideFold)" title="折叠/展开左侧目录" aria-label="折叠目录"><span id="foldIco">«</span></button>
   <div class="search">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#98a0ad" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
     <input id="gsearch" placeholder="搜索题目 / 考点 / 口诀…" oninput="globalSearch(this.value)">
@@ -616,11 +647,12 @@ async function cloudSync(auto){
     if(!auto) alert('同步失败：'+(e.message||e));
   }finally{ _syncBusy=false; }
 }
-function scheduleSync(){   // 改动落盘后 15s 自动上传（去抖），避免每答一题都打网络
+function scheduleSync(){   // 只在「交卷后」或手动点同步按钮时才传（刷题过程中不传，省流量）
+  if(!S.submitted) return;
   if(cloud.hold||!cloud.key) return;
   if(!cloud.token && !cmtAuthed()) return;
   clearTimeout(_syncTimer);
-  _syncTimer=setTimeout(function(){ cloudSync(true); },15000);
+  _syncTimer=setTimeout(function(){ cloudSync(true); },20000);
 }
 /* 评论账号登录后就能同步进度（服务端），无需 GitHub Token */
 function cmtAuthed(){ try{ return !!(CMT.user && CMT.user.token); }catch(e){ return false; } }
@@ -707,6 +739,81 @@ function mobTab(n){
   switchNav(n); openDrawer(); syncMob(n);
 }
 function isMob(){ return window.innerWidth<=700; }
+
+/* ===== 左侧目录折叠：用户自由开关，选好卷子后自动折一次 ===== */
+const LS_FOLD='cd27_fold_v1';
+function loadFold(){
+  try{ const v=localStorage.getItem(LS_FOLD);
+    S.sideFold = (v===null) ? (window.innerWidth<=1240) : (v==='1');
+  }catch(e){ S.sideFold=(window.innerWidth<=1240); }
+}
+function applyFold(){
+  const s=document.querySelector('.side'); if(s) s.classList.toggle('fold', !!S.sideFold);
+  const ic=document.getElementById('foldIco'); if(ic) ic.textContent = S.sideFold?'»':'«';
+  const b=document.getElementById('foldBtn'); if(b) b.title = S.sideFold?'展开左侧目录':'折叠左侧目录';
+}
+function setSideFold(v){ S.sideFold=!!v; try{localStorage.setItem(LS_FOLD, v?'1':'0')}catch(e){} applyFold(); }
+
+/* ===== 居中确认框（替代浏览器原生 confirm：原生框位置/样式不可控） ===== */
+let _ckOk=null;
+function uiConfirm(text, onOk, opt){
+  opt=opt||{};
+  let m=document.getElementById('mck');
+  if(!m){ m=document.createElement('div'); m.id='mck'; m.className='mck'; document.body.appendChild(m); }
+  m.innerHTML='<div class="mck-b"><div class="mck-t">'+(opt.title||'确认')+'</div>'
+    +'<div class="mck-c">'+esc(text)+'</div><div class="mck-f">'
+    +'<button class="btn line" onclick="uiConfirmClose()">'+(opt.cancelText||'取消')+'</button>'
+    +'<button class="btn '+(opt.danger?'danger':'pri')+'" onclick="uiConfirmOk()">'+(opt.okText||'确定')+'</button></div></div>';
+  _ckOk = onOk || null;
+  m.classList.add('on');
+  m.onclick = function(e){ if(e.target===m) uiConfirmClose(); };
+}
+function uiConfirmClose(){ const m=document.getElementById('mck'); if(m) m.classList.remove('on'); _ckOk=null; }
+function uiConfirmOk(){ const f=_ckOk; uiConfirmClose(); if(f){ try{ f(); }catch(e){} } }
+
+/* 切题滑动过渡：dir='L' = 下一题（新题从右进），'R' = 上一题 */
+function animQ(dir){
+  const w=document.getElementById('qwrap'); if(!w) return;
+  w.classList.remove('slidL','slidR');
+  void w.offsetWidth;
+  w.classList.add(dir==='R'?'slidR':'slidL');
+  setTimeout(function(){ w.classList.remove('slidL','slidR'); }, 340);
+}
+
+/* ===== 题序 / 卷名 / 题级统计（错题本、口诀、首页共用） ===== */
+function qOrderMap(){                       // tid → 在题库里的全局顺序（= 讲义/考点顺序）
+  if(S._qord) return S._qord;
+  const m={}; let i=0;
+  (DB.books||[]).forEach(function(b){ (b.sets||[]).forEach(function(s){
+    (s.items||[]).forEach(function(t){ if(!(t in m)) m[t]=i++; });
+  }); });
+  S._qord=m; return m;
+}
+function setMap(){                          // tid → 所在套卷名
+  if(S._setmap) return S._setmap;
+  const m={};
+  (DB.books||[]).forEach(function(b){ (b.sets||[]).forEach(function(s){
+    const nm=String(b.name||'').replace('（已更新）','')+' · '+s.set;
+    (s.items||[]).forEach(function(t){ if(!m[t]) m[t]=nm; });
+  }); });
+  S._setmap=m; return m;
+}
+function bumpStat(tid, ok){                 // 题级正确率：每次判定+1
+  store.hist=store.hist||{};
+  const h=store.hist[tid]||{n:0,ok:0};
+  h.n++; if(ok) h.ok++;
+  store.hist[tid]=h;
+}
+function tidRate(tid){
+  const h=(store.hist||{})[tid];
+  if(!h||!h.n) return null;
+  return {pct:Math.round(h.ok/h.n*100), n:h.n, ok:h.ok};
+}
+/* 继续上次 */
+const LS_LAST='cd27_last_v1';
+function saveLast(){ if(!S.quiz) return; try{ localStorage.setItem(LS_LAST, JSON.stringify({ids:S.quiz.ids,title:S.quiz.title,idx:S.idx})) }catch(e){} }
+function loadLast(){ try{ const j=JSON.parse(localStorage.getItem(LS_LAST)||'null'); return j&&j.ids&&j.ids.length?j:null; }catch(e){ return null; } }
+function resumeLast(){ const l=loadLast(); if(!l) return; startQuiz(l.ids,l.title,l.ids[l.idx],true); }
 var _lastMob = isMob(), _lastAside = noDetail();
 window.addEventListener('resize', function(){
   var m=isMob(), nd=noDetail();
@@ -751,11 +858,55 @@ function exportList(kind){
   setTimeout(function(){URL.revokeObjectURL(a.href)},3000);
 }
 function clearList(kind){
-  if(!confirm('确定清空？此操作不可撤销')) return;
-  Object.keys(store[kind]||{}).forEach(function(tid){ untouch(kind,tid); });
-  store[kind]={}; save(); renderAll();
+  uiConfirm('确定清空？此操作不可撤销', function(){
+    Object.keys(store[kind]||{}).forEach(function(tid){ untouch(kind,tid); });
+    store[kind]={}; save(); renderAll();
+  }, {title:'清空', okText:'清空', danger:true});
 }
 function removeFrom(kind,tid){ delete store[kind][tid]; untouch(kind,tid); save(); renderAll(); }
+
+/* 错题本：按考点 / 按试卷 两级分组，带错次 + 题级正确率 */
+function renderWrongBook(wrap){
+  const wr=Object.keys(store.wrong||{});
+  const ord=qOrderMap(), sm=setMap();
+  const grp=S.wrongGroup||'kd';
+  wr.sort(function(a,b){ return ((ord[a]===undefined?9e9:ord[a])-(ord[b]===undefined?9e9:ord[b])); });
+  const groups={}, order=[];
+  wr.forEach(function(t){
+    const q=DB.questions[t]||{};
+    const key = grp==='kd' ? (q.kaodian||'未标注考点') : (sm[t]||'未归入套卷');
+    if(!groups[key]){ groups[key]={list:[],min:(ord[t]===undefined?9e9:ord[t])}; order.push(key); }
+    groups[key].list.push(t);
+  });
+  if(grp==='set') order.sort(function(a,b){ return groups[a].min-groups[b].min; });
+  let h='<div class="panel"><div class="panel-h">错题本<span>'+wr.length+' 题 · 按'+(grp==='kd'?'考点':'试卷')+'顺序</span></div>'
+    +'<div class="toolbar">'
+    +'<button class="btn pri" onclick="startQuiz(Object.keys(store.wrong),\'错题本\')">全部重刷 '+wr.length+' 题</button>'
+    +'<button class="btn '+(grp==='kd'?'':'line')+'" onclick="S.wrongGroup=\'kd\';renderAll()">按考点</button>'
+    +'<button class="btn '+(grp==='set'?'':'line')+'" onclick="S.wrongGroup=\'set\';renderAll()">按试卷</button>'
+    +'<button class="btn line" onclick="exportList(\'wrong\')">导出</button>'
+    +'<button class="btn line" onclick="clearList(\'wrong\')">清空</button>'
+    +'</div><div style="padding:12px 13px;max-height:calc(100vh - 260px);overflow:auto">';
+  order.forEach(function(k){
+    const list=groups[k].list;
+    const lj=JSON.stringify(list).replace(/"/g,'&quot;');
+    h+='<div class="wgrp"><div class="wgrp-h">'+esc(k)+'<span class="c">'+list.length+' 题</span>'
+      +'<span class="go" onclick="startQuiz('+lj+',\'错题·'+(grp==='kd'?'考点':'试卷')+'\')">刷这组 ›</span></div>';
+    list.forEach(function(t,i){
+      const q=DB.questions[t]||{}, n=Number(store.wrong[t])||0, rt=tidRate(t);
+      const col=rt?(rt.pct>=60?'#12a150':(rt.pct>=40?'#e08a00':'#d4380d')):'#b3bac5';
+      h+='<div class="wrow" onclick="startQuiz([\''+t+'\'],\'错题本\')"><span class="n">'+(i+1)+'</span>'
+        +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
+        +(n>1?'<span class="badge">错 '+n+' 次</span>':'<span class="badge" style="background:#f2f4f7;color:#5b6270">错 1 次</span>')
+        +(rt?'<span style="color:'+col+';font-weight:600;min-width:38px;text-align:right" title="做过 '+rt.n+' 次，对 '+rt.ok+' 次">'+rt.pct+'%</span>':'')
+        +'</div>';
+    });
+    h+='</div>';
+  });
+  if(!wr.length) h+='<div class="empty">还没有错题，刷题时答错会自动收进来</div>';
+  h+='</div></div>';
+  wrap.innerHTML=h;
+}
 
 function renderRecordPanel(head,wrap,tools){
   tools.style.display='none';
@@ -798,7 +949,8 @@ function renderRecordPanel(head,wrap,tools){
     return;
   }
 
-  const ids=(S.rectab==='wrong'?wr:(S.rectab==='fav'?fv:dk));
+  if(S.rectab==='wrong'){ renderWrongBook(wrap); return; }
+  const ids=(S.rectab==='fav'?fv:dk);
   const title={wrong:'错题本',fav:'我的收藏',dk:'不会的题'}[S.rectab];
   const tip={wrong:'答错或未答会自动收进来；之后答对会自动移出',fav:'刷题时点题干右上角的 ☆ 收藏',dk:'刷题时点下方「不会」收进来'}[S.rectab];
   if(!ids.length){
@@ -968,6 +1120,7 @@ async function loadData(){
     if(vt&&DB.meta&&DB.meta.version) vt.textContent=DB.meta.version+' · '+DB.meta.total+'题';
     buildIndex();
     Object.keys(DB.tree).forEach(k=>{const p=DB.tree[k][1]; if(!p||!DB.tree[p]) S.openTree.add(k);});
+    loadFold(); applyFold();
     renderAll(); bindKeys(); bindSwipe();
     const _sp=new URLSearchParams(location.search);
     if(_sp.get('synctest')) SYNC.baseUrl=_sp.get('synctest');
@@ -1058,7 +1211,9 @@ function toggleTree(id){ if(S.openTree.has(id)) S.openTree.delete(id); else S.op
 
 function sideMantras(){
   const rows=[]; Object.entries(DB.mantras).forEach(([t,l])=>l.forEach(m=>rows.push({t,...m})));
-  rows.sort((a,b)=>(b.q-a.q)||(b.text.length-a.text.length));
+  // 按考点顺序 = 题目在题库里的顺序（题库本身就是讲义/考点顺序）
+  const ord=qOrderMap();
+  rows.sort((a,b)=>((ord[a.t]??9e9)-(ord[b.t]??9e9))||(b.q-a.q)||(b.text.length-a.text.length));
   const only3=S._only3!==false;
   let h=`<div class="side-title">${rows.length} 条口诀</div>
     <div class="li" onclick="S._only3=${!only3};renderSide()"><span class="t">${only3?'☑':'☐'} 只看 ★★★</span><span class="c">${rows.filter(r=>r.q===3).length}</span></div>`;
@@ -1117,6 +1272,7 @@ function sideRecord(){
 /* ================= 刷题 ================= */
 function startQuizBySet(bi,si){ if(typeof closeDrawer==='function') closeDrawer(); const b=DB.books[bi],s=b.sets[si];
   S.hist=[];                       // 从左侧选卷 = 新起点，清空返回栈
+  if(!isMob()) setSideFold(true);   // 选好卷子后强制折叠左侧目录（给题目让宽，可再点开）
   s.items.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; });  // 重刷：清这一套的旧作答
   startQuiz(s.items, b.name.replace('（已更新）','')+' · '+s.set, null, true); }
 function startQuiz(ids,title,atTid,resetHist){ if(typeof closeDrawer==='function') closeDrawer();
@@ -1147,25 +1303,48 @@ function renderMain(){
   if(S.nav==='record'&&!S.quiz){ renderRecordPanel(head,wrap,tools); return; }
   if(!S.quiz){
     head.innerHTML=''; tools.style.display='none';
-    wrap.innerHTML=`<div class="empty" style="padding-top:70px"><div style="font-size:32px;margin-bottom:10px">📘</div>
-      ${isMob()?'点左上角 ☰ 选套卷':'左侧选套卷 / 点考点开始'}<br><span style="color:#c2c8d2;font-size:12px">${DB.meta.sets} 套 · ${DB.meta.total} 题 · ${Object.keys(DB.mantras).length} 题带口诀</span></div>`;
+    const sc=loadScores();
+    const dn=Object.keys(store.done).length;
+    const okN=Object.values(store.done).filter(function(x){return x==='ok'}).length;
+    const wrN=Object.keys(store.wrong||{}).length;
+    const last=loadLast();
+    const avg=sc.length?Math.round(sc.reduce(function(a,x){return a+(x.full?x.score/x.full:0)},0)/sc.length*100):0;
+    wrap.innerHTML='<div class="homegrid">'
+      +'<div class="statc"><b>'+dn+'</b><span>已刷 / '+DB.meta.total+'</span></div>'
+      +'<div class="statc"><b>'+(dn?pct(okN,dn):0)+'%</b><span>总正确率</span></div>'
+      +'<div class="statc"><b>'+wrN+'</b><span>待复习错题</span></div>'
+      +'<div class="statc"><b>'+sc.length+'</b><span>交卷次数</span></div>'
+      +'</div>'
+      +'<div class="panel"><div class="panel-h">成绩趋势<span>'+(sc.length?('最近 '+Math.min(sc.length,10)+' 次 · 平均得分率 '+avg+'%'):'交卷后自动出现折线图')+'</span></div>'
+      +scoreChart(sc.slice(-10))+'</div>'
+      +'<div class="panel"><div class="panel-h">开始练习<span>'+DB.meta.sets+' 套 · '+DB.meta.total+' 题 · '+Object.keys(DB.mantras).length+' 题带口诀</span></div>'
+      +'<div style="padding:14px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">'
+      +(last?'<button class="btn pri" onclick="resumeLast()">继续上次：'+esc(String(last.title||'').slice(0,22))+'</button>':'')
+      +(wrN?'<button class="btn '+(last?'line':'pri')+'" onclick="startQuiz(Object.keys(store.wrong),\'错题本\')">复习错题 '+wrN+' 题</button>':'')
+      +'<span style="font-size:12px;color:#b3bac5">'+(last||wrN?'':'')+(isMob()?'点左上角 ☰ 选套卷':'或从左侧选套卷 / 考点')+'</span>'
+      +'</div></div>';
     return;
   }
+  saveLast();
   const ids=S.quiz.ids,i=S.idx,tid=ids[i],q=DB.questions[tid];
   if(!q){ wrap.innerHTML='<div class="empty">题目不存在</div>'; return; }
   const ans=S.answers[tid]||[];
   const revealed = !!S.revealed[tid] || S.submitted;   // 练习/考试都只在“提交后”才判
   const rel=sameKaodian(tid);
 
+  let _ansN=0,_okN=0;
+  ids.forEach(function(t){ const a=S.answers[t]||[]; if(a.length){ _ansN++; if(S.revealed[t]||S.submitted){ if(isRight(DB.questions[t],a)) _okN++; } } });
+  const _rate=_ansN?Math.round(_okN/_ansN*100):0;
   head.innerHTML=`<button class="btn line" style="height:29px;padding:0 10px;font-size:12.5px;flex:0 0 auto" onclick="backOne()"
       title="返回上一级（Esc / 左右划）">← ${S.hist.length?'返回':'退出'}<span class="swipetip">划</span></button>
     <div class="where"><b>${esc(S.quiz.title)}</b>${rel.length?`　
       <span class="kdlink" onclick="sameGo('${tid}')">同考点还有 ${rel.length} 题 ›</span>`:''}</div>
     <div class="pbar"><i style="width:${(i+1)/ids.length*100}%"></i></div>
-    <div style="font-size:12px;color:var(--muted);min-width:58px;text-align:right">${i+1} / ${ids.length}</div>`;
+    <div class="qstat" title="本卷已答 ${_ansN} 题，已判定答对 ${_okN} 题">已答 ${_ansN}/${ids.length} · 正确率 ${_rate}%</div>
+    <div style="font-size:12px;color:var(--muted);min-width:56px;text-align:right">${i+1} / ${ids.length}</div>`;
 
   const keys=Object.keys(q.xuanxiang||{}).sort();
-  const stemNote=noteText(tid);
+  const stemNote=isMob()?'':noteText(tid);   // 手机上不显示题干笔记（挤版面，选项笔记保留）
 
   let h=`<div class="qcard"><div class="q-meta">
       <span class="tag">${q.type==='多选'?'多选':'单选'}</span>
@@ -1176,7 +1355,7 @@ function renderMain(){
     </div>
     ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「提交本题」</div>':''}
     <div class="q-title">${esc(q.title)}
-      <span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>
+      ${isMob()?'':`<span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>`}
     </div>
     ${stemNote?`<div style="background:var(--note-soft);border-left:3px solid var(--note);border-radius:7px;padding:8px 11px;margin:-6px 0 14px;font-size:13px;line-height:1.65;color:#4b3a7a;white-space:pre-wrap">${esc(stemNote)}</div>`:''}
     <div class="opts">`;
@@ -1271,13 +1450,15 @@ function clearAnswer(){
 function resetQuiz(){
   if(!S.quiz) return;
   const ids=S.quiz.ids;
-  if(!confirm('重做本卷（'+ids.length+' 题）？\n\n会清空本卷的作答和判定；错题本与成绩记录保留，重做答对会自动移出错题本。')) return;
-  ids.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done) delete store.done[t]; });
-  S.submitted=false; S.idx=0; S._lastTid=null;
-  save(); renderAll();
+  uiConfirm('重做本卷（'+ids.length+' 题）？\n\n会清空本卷的作答和判定；错题本与成绩记录保留，重做答对会自动移出错题本。', function(){
+    ids.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done) delete store.done[t]; });
+    S.submitted=false; S.idx=0; S._lastTid=null;
+    save(); renderAll();
+  }, {title:'重做本卷', okText:'重做'});
 }
 function rec(tid,arr){
   const q=DB.questions[tid], ok=isRight(q,arr);
+  bumpStat(tid, ok);
   store.done[tid]= ok?'ok':'no'; stamp('done',tid);
   if(ok){ delete store.wrong[tid]; untouch('wrong',tid); delete (store.dk||{})[tid]; untouch('dk',tid); } else hitWrong(tid);
   save();
@@ -1285,7 +1466,7 @@ function rec(tid,arr){
 function dontKnow(){
   if(!S.quiz) return;
   const tid=S.quiz.ids[S.idx], q=DB.questions[tid];
-  store.dk=store.dk||{}; store.dk[tid]=1; stamp('dk',tid); hitWrong(tid); store.done[tid]='no'; stamp('done',tid); save();
+  store.dk=store.dk||{}; store.dk[tid]=1; stamp('dk',tid); hitWrong(tid); store.done[tid]='no'; stamp('done',tid); bumpStat(tid,false); save();
   const rel=sameKaodian(tid);
   if(!rel.length){ alert('这个考点只有这一道题（题库里没有同类题）'); renderAll(); return; }
   startQuiz(rel,'同考点：'+(q.kaodian||''));
@@ -1312,8 +1493,8 @@ function openRel(fromTid, target){
   startQuiz(ids, '同考点：'+(q.kaodian||''), target);
 }
 function revealNow(){ if(!S.quiz) return; S.revealed[S.quiz.ids[S.idx]]=true; renderAll(); }
-function prev(){ if(S.quiz&&S.idx>0){S.idx--;closeNote();renderAll();} }
-function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){S.idx++;closeNote();renderAll();} }
+function prev(){ if(S.quiz&&S.idx>0){S.idx--;closeNote();renderAll();animQ('R');} }
+function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){S.idx++;closeNote();renderAll();animQ('L');} }
 function toggleFav(tid){ if(store.fav[tid]){ delete store.fav[tid]; untouch('fav',tid); } else { store.fav[tid]=1; stamp('fav',tid); } save(); renderAll(); }
 
 /* ================= 笔记 ================= */
@@ -1420,11 +1601,13 @@ function submit(){
   ids.forEach(t=>{
     const q=DB.questions[t], pt=q.type==='多选'?2:1; full+=pt;
     const a=S.answers[t]||[];
+    bumpStat(t, a.length && isRight(q,a));
     if(!a.length){ blank++; store.done[t]='no'; stamp('done',t); hitWrong(t); return; }
     if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; stamp('done',t); delete store.wrong[t]; untouch('wrong',t); }
     else { noN++; store.done[t]='no'; stamp('done',t); hitWrong(t); }
   });
   save(); recordScore({ts:Date.now(),title:S.quiz.title,score:sc,full:full,ok:okN,no:noN,blank:blank,n:ids.length,mode:S.mode}); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
+  scheduleSync();   // 交卷后自动同步一次进度
   const m=document.createElement('div'); m.className='modal';
   m.innerHTML=`<div class="modal-card"><div class="score">${sc}<small> / ${full}</small></div>
     <div class="sub">${esc(S.quiz.title)}</div>
@@ -1592,7 +1775,7 @@ const SUPA_MAIL = 'n27cmt.com';               // 伪邮箱域名，和后端 mig
 /* 是否把学习进度（成绩/错题/收藏）也放到 Supabase。
    false = 只同步评论，进度继续走原来的 GitHub records/<同步码>.json 方案（省流量）
    用 patch_frontend.py --no-progress 会自动改成 false */
-var SUPA_PROGRESS = false;
+var SUPA_PROGRESS = true;
 
 /* 昵称 → 登录邮箱：u + utf8hex(nick) + @example.com
    不用 crypto.subtle，因为手机用 http://192.168.x.x 访问时那不是安全上下文会报错 */
@@ -1629,8 +1812,8 @@ async function supaAuth(path, body){
     // GoTrue 的报错字段五花八门，统一翻成人话
     const msg = j.msg || j.message || j.error_description || j.error || ('HTTP ' + r.status);
     if (/already registered|already exists/i.test(msg)) throw new Error('这个昵称已被占用');
-    if (/invalid login credentials|invalid_grant/i.test(msg)) throw new Error('昵称或口令不对');
-    if (/password/i.test(msg) && /least|short|6/i.test(msg)) throw new Error('口令至少 6 位');
+    if (/invalid login credentials|invalid_grant/i.test(msg)) throw new Error('昵称或密码不对');
+    if (/password/i.test(msg) && /least|short|6/i.test(msg)) throw new Error('密码至少 6 位');
     throw new Error(msg);
   }
   return j;
@@ -1730,7 +1913,7 @@ async function cmtApi(path, opt){
     const email = supaEmail(nick);
     if (path === '/api/reg') {
       if (nick.length < 2 || nick.length > 16) throw new Error('昵称 2–16 位');
-      if (pass.length < 6) throw new Error('口令至少 6 位');
+      if (pass.length < 6) throw new Error('密码至少 6 位');
       j = await supaAuth('/signup', { email: email, password: pass, data: { nick: nick } });
       s = j.session || (j.access_token ? j : null);
       if (!s) throw new Error('注册成功但没拿到登录态：请到 Supabase → Authentication → Providers → Email 关闭 Confirm email');
@@ -1756,7 +1939,7 @@ async function cmtApi(path, opt){
       body: JSON.stringify({ password: String(b.new || '') }), cache: 'no-store'
     });
     let e = {}; try { e = await r.json(); } catch (x) {}
-    if (!r.ok) throw new Error(e.msg || e.message || '改密码失败（新口令至少 6 位）');
+    if (!r.ok) throw new Error(e.msg || e.message || '改密码失败（新密码至少 6 位）');
     return { ok: true, token: u.token, uid: u.uid, nick: u.nick };
   }
 
@@ -1918,7 +2101,7 @@ function cmtRender(){
   }else{
     ft.innerHTML='<div class="cs-login" style="margin-bottom:0"><div style="margin-bottom:6px">登录后才能发评论 / 点赞。账号自己设，只能删自己的评论。</div>'
       +'<div class="uc-row"><input id="cmtNick" placeholder="昵称（2–16 位）" maxlength="16" autocomplete="off">'
-      +'<input id="cmtPass" type="password" placeholder="口令（≥6 位）" autocomplete="current-password"></div>'
+      +'<input id="cmtPass" type="password" placeholder="密码（≥6 位）" autocomplete="current-password"></div>'
       +'<div class="uc-row" style="margin-top:6px"><button class="btn pri" style="flex:1" onclick="cmtAuth(\'login\')">登录</button>'
       +'<button class="btn line" style="flex:1" onclick="cmtAuth(\'reg\')">注册新账号</button></div></div>';
   }
@@ -2098,7 +2281,7 @@ window.addEventListener('online', function(){ if(cmtQueueCount()||cmtOpsCount())
 async function cmtAuth(kind){
   const nickEl=document.getElementById('cmtNick'), passEl=document.getElementById('cmtPass');
   const nick=(nickEl&&nickEl.value||'').trim(), pass=(passEl&&passEl.value||'');
-  if(!nick||!pass) return alert('填昵称和口令');
+  if(!nick||!pass) return alert('填昵称和密码');
   try{
     const j=await cmtApi('/api/'+(kind==='reg'?'reg':'login'),{method:'POST',body:{nick:nick,pass:pass}});
     cmtSaveUser({token:j.token,uid:j.uid,nick:j.nick});
@@ -2133,19 +2316,37 @@ function ucRender(){
     h+='<div class="uc-card"><div class="uc-line">当前账号：<b>'+esc(u.nick)+'</b></div>'
       +'<div class="uc-row" style="margin-top:8px"><input id="ucNick" placeholder="新昵称" maxlength="16">'
       +'<button class="btn pri" onclick="ucSaveNick()">改昵称</button></div>'
-      +'<div class="uc-row" style="margin-top:8px"><input id="ucOld" type="password" placeholder="原口令">'
-      +'<input id="ucNew" type="password" placeholder="新口令（≥6 位）">'
+      +'<div class="uc-row" style="margin-top:8px"><input id="ucOld" type="password" placeholder="原密码">'
+      +'<input id="ucNew" type="password" placeholder="新密码（≥6 位）">'
       +'<button class="btn line" onclick="ucSavePass()">改密码</button></div>'
-      +'<div class="uc-line" style="margin-top:10px;color:#98a0ad;font-size:11.5px">账号只存在本机评论服务里。口令别和别的网站用同一个。</div>'
+      +'<div class="uc-line" style="margin-top:10px;color:#98a0ad;font-size:11.5px">账号保存在云端（Supabase），换设备登录同一账号即可同步评论与进度。</div>'
       +'<div class="uc-line" style="margin-top:6px"><span class="cmtlink" onclick="ucLogout()">退出登录</span></div></div>';
   }else{
-    h+='<div class="uc-card">还没登录。<span class="cmtlink" onclick="cmtFocusLogin()">去评论区登录 / 注册</span></div>';
+    h+='<div class="uc-card"><div class="uc-line" style="margin-bottom:9px">还没登录。<b>注册</b>后可以发评论、点赞、同步进度。</div>'
+      +'<div class="uc-row"><input id="ucNick2" placeholder="昵称（2–16 位）" maxlength="16" autocomplete="off">'
+      +'<input id="ucPass2" type="password" placeholder="密码（≥6 位）" autocomplete="current-password"></div>'
+      +'<div class="uc-row" style="margin-top:8px">'
+      +'<button class="btn pri" style="flex:1" onclick="ucAuth2(\'login\')">登录</button>'
+      +'<button class="btn line" style="flex:1" onclick="ucAuth2(\'reg\')">注册新账号</button></div>'
+      +'<div class="uc-line" style="margin-top:8px;color:#98a0ad;font-size:11.5px">账号不需要邮箱，昵称+密码就行。</div></div>';
   }
   h+='<div class="uc-hd">提建议 <span>所有人可见</span></div>'
    +'<div class="uc-card"><textarea id="ucText" maxlength="500" placeholder="想加什么功能 / 哪里不好用，直接写…"></textarea>'
    +'<div style="display:flex;justify-content:flex-end"><button class="btn pri" onclick="ucSendSuggest()">发送建议</button></div></div>'
    +'<div class="uc-hd">大家的建议 <span id="ucSugN"></span></div><div id="ucSugList"><div class="cs-empty">加载中…</div></div>';
   bd.innerHTML=h;
+}
+function ucAuth2(kind){
+  const n=(document.getElementById('ucNick2')||{}).value||'';
+  const p=(document.getElementById('ucPass2')||{}).value||'';
+  const nick=String(n).trim(), pass=String(p);
+  if(!nick||!pass) return alert('填昵称和密码');
+  cmtApi('/api/'+(kind==='reg'?'reg':'login'),{method:'POST',body:{nick:nick,pass:pass}}).then(function(j){
+    cmtSaveUser({token:j.token,uid:j.uid,nick:j.nick});
+    if(SUPA_PROGRESS) try{ cloudBindUser(j.uid); }catch(e){}
+    ucRender(); try{ cmtRender(); }catch(e){}
+    try{ cloudSync(true); }catch(e){}
+  }).catch(function(e){ alert(e.message); });
 }
 function sugItem(c,me){
   const isMine=CMT.user&&c.uid===CMT.user.uid;
@@ -2198,7 +2399,7 @@ async function ucSavePass(){
   if(!CMT.user) return;
   const o=((document.getElementById('ucOld')||{}).value||'');
   const n=((document.getElementById('ucNew')||{}).value||'');
-  if(!o||!n) return alert('填原口令和新口令');
+  if(!o||!n) return alert('填原密码和新密码');
   try{
     const j=await cmtApi('/api/pass',{method:'POST',body:{old:o,new:n}});
     CMT.user.token=j.token; cmtSaveUser(CMT.user);
