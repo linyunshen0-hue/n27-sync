@@ -360,14 +360,184 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 /* ================= 数据 ================= */
 const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
 const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
-let store = { done:{}, wrong:{}, fav:{}, dk:{} };   // dk = 不会
+let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{} };   // dk = 不会；mt=修改时间戳 del=删除时间戳（云端合并用）
 let notes = {};
 /* ================= 成绩记录 / 错题·收藏库 ================= */
 const LS_SCORE='cs3_scores_v1';
 function loadScores(){ try{const a=JSON.parse(localStorage.getItem(LS_SCORE)||'[]');return Array.isArray(a)?a:[]}catch(e){return []} }
 function saveScores(a){ try{localStorage.setItem(LS_SCORE,JSON.stringify(a))}catch(e){} }
 function recordScore(o){ const a=loadScores(); a.push(o); if(a.length>300) a.splice(0,a.length-300); saveScores(a); }
-function hitWrong(tid){ store.wrong[tid]=(Number(store.wrong[tid])||0)+1; }
+/* 修改/删除时间戳：云端合并时“谁更新谁赢”，删除也能传播到别的设备 */
+function stamp(kind,tid){
+  store.mt=store.mt||{}; const m=store.mt[kind]=store.mt[kind]||{};
+  m[tid]=Date.now(); return m[tid];
+}
+function untouch(kind,tid){
+  const t=Date.now();
+  store.mt=store.mt||{}; (store.mt[kind]=store.mt[kind]||{})[tid]=t;
+  store.del=store.del||{}; (store.del[kind]=store.del[kind]||{})[tid]=t;
+}
+function hitWrong(tid){ store.wrong[tid]=(Number(store.wrong[tid])||0)+1; stamp('wrong',tid); }
+
+/* ================= 云端同步（成绩 / 错题 / 收藏） =================
+   读：GitHub raw（公开，无需凭据）；写：需本机保存的 GitHub Token。
+   合并按时间戳（新的赢），删除用 del 时间戳传播。文件在 records/<同步码>.json */
+const LS_CLOUD='cd27_cloud_v1', CLOUD_DIR='records/';
+let cloud={key:'',token:'',state:'',busy:false,hold:false,sha:''};
+let _syncTimer=null, _syncBusy=false;
+function loadCloud(){ try{const c=JSON.parse(localStorage.getItem(LS_CLOUD)||'{}');
+  cloud.key=c.key||''; cloud.token=c.token||''; }catch(e){} }
+function saveCloud(){ try{localStorage.setItem(LS_CLOUD,JSON.stringify({key:cloud.key,token:cloud.token}))}catch(e){} }
+function setCloudState(t){ cloud.state=t; const el=document.getElementById('cloudState'); if(el) el.textContent=t; }
+function newSyncKey(){
+  const ab=new Uint8Array(9);
+  if(window.crypto&&crypto.getRandomValues) crypto.getRandomValues(ab);
+  else for(let i=0;i<9;i++) ab[i]=Math.floor(Math.random()*256);
+  return Array.from(ab).map(function(b){return b.toString(36).padStart(2,'0')}).join('').slice(0,14);
+}
+function b64enc(str){
+  const bytes=new TextEncoder().encode(str); let bin='';
+  for(let i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));
+  return btoa(bin);
+}
+function b64dec(b64){
+  const bin=atob(b64), bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function cloudFileUrl(){ return 'https://raw.githubusercontent.com/'+SYNC.repo+'/'+SYNC.branch+'/'+CLOUD_DIR+encodeURIComponent(cloud.key)+'.json?t='+Date.now(); }
+function cloudApiUrl(){ return 'https://api.github.com/repos/'+SYNC.repo+'/contents/'+CLOUD_DIR+encodeURIComponent(cloud.key)+'.json'; }
+function mergeScores(a,b){
+  const map={};
+  (a||[]).concat(b||[]).forEach(function(x){ if(!x||!x.ts) return; map[x.ts+'_'+(x.title||'')]=x; });
+  return Object.keys(map).map(function(k){return map[k]}).sort(function(p,q){return p.ts-q.ts}).slice(-300);
+}
+/* 把云端记录并进本地：同一 tid 取最新事件（修改或删除），旧的补进来，不覆盖更新的本地 */
+function mergeCloud(remote){
+  if(!remote) return;
+  const R=remote.store||{};
+  cloud.hold=true;
+  ['done','wrong','fav','dk'].forEach(function(k){
+    const cand={};
+    [store,R].forEach(function(src){
+      src=src||{};
+      const m=(src.mt||{})[k]||{}, d=(src.del||{})[k]||{};
+      Object.keys(src[k]||{}).forEach(function(tid){
+        const t=Number(m[tid])||0;
+        if(!cand[tid]||t>cand[tid].t) cand[tid]={t:t,v:src[k][tid],del:false};
+      });
+      Object.keys(d).forEach(function(tid){
+        const t=Number(d[tid])||0;
+        if(!cand[tid]||t>cand[tid].t) cand[tid]={t:t,del:true};
+      });
+    });
+    const out={}, mo={}, dl={};
+    Object.keys(cand).forEach(function(tid){
+      const c=cand[tid];
+      if(c.del) dl[tid]=c.t||1;
+      else { out[tid]=c.v; mo[tid]=c.t||Date.now(); }
+    });
+    store[k]=out;
+    store.mt=store.mt||{}; store.mt[k]=mo;
+    store.del=store.del||{}; store.del[k]=dl;
+  });
+  saveScores(mergeScores(loadScores(),remote.scores||[]));
+  save();
+  cloud.hold=false;
+}
+async function cloudPull(silent){
+  if(!cloud.key){ if(!silent) alert('先在「记录 → 云端同步」里设置同步码'); return null; }
+  let data=null;
+  if(cloud.token){
+    const r=await fetch(cloudApiUrl(),{headers:{Authorization:'Bearer '+cloud.token,Accept:'application/vnd.github+json'},cache:'no-store'});
+    if(r.status===404){ data=null; }
+    else if(!r.ok){ throw new Error('读取云端失败 HTTP '+r.status+'（Token 权限不足？）'); }
+    else { const j=await r.json(); cloud.sha=j.sha||'';
+      if(j.content){ try{ data=JSON.parse(b64dec(String(j.content).replace(/\s/g,''))); }catch(e){} } }
+  }else{
+    const r=await fetch(cloudFileUrl(),{cache:'no-store'});
+    if(r.ok){ try{ data=await r.json(); }catch(e){} }
+    else if(r.status!==404){ throw new Error('读取云端失败 HTTP '+r.status); }
+  }
+  if(data&&data.store) mergeCloud(data);
+  else if(!data&&!silent) setCloudState('云端还是空的，上传后其他设备才能拉取');
+  if(data) setCloudState('已拉取 '+(data.updated?new Date(data.updated).toLocaleString():''));
+  return data;
+}
+async function cloudPush(){
+  if(!cloud.key) throw new Error('先设置同步码');
+  if(!cloud.token) throw new Error('上传需要 GitHub Token（只读拉取不需要）');
+  const payload={v:1,key:cloud.key,updated:Date.now(),
+    store:{done:store.done,wrong:store.wrong,fav:store.fav,dk:store.dk,mt:store.mt,del:store.del},
+    scores:loadScores()};
+  let sha=cloud.sha||'';
+  const g=await fetch(cloudApiUrl(),{headers:{Authorization:'Bearer '+cloud.token,Accept:'application/vnd.github+json'},cache:'no-store'});
+  if(g.ok){ const j=await g.json(); sha=j.sha||''; }
+  else if(g.status!==404){ throw new Error('读取云端失败 HTTP '+g.status+'（Token 权限？）'); }
+  else sha='';
+  const body={message:'sync records '+new Date().toISOString().slice(0,19),content:b64enc(JSON.stringify(payload)),branch:SYNC.branch};
+  if(sha) body.sha=sha;
+  const r=await fetch(cloudApiUrl(),{method:'PUT',headers:{Authorization:'Bearer '+cloud.token,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){ const t=await r.text(); throw new Error('上传失败 HTTP '+r.status+' '+t.slice(0,140)); }
+  const j=await r.json(); cloud.sha=(j.content&&j.content.sha)||'';
+  setCloudState('已上传 '+new Date().toLocaleTimeString());
+}
+async function cloudSync(auto){
+  if(_syncBusy) return; _syncBusy=true; setCloudState('同步中…');
+  try{
+    await cloudPull(true);
+    if(cloud.token) await cloudPush();
+    setCloudState((cloud.token?'✓ 已同步 ':'✓ 已拉取（只读）')+new Date().toLocaleTimeString());
+    renderAll();
+  }catch(e){
+    setCloudState('✕ '+(e.message||'同步失败'));
+    if(!auto) alert('同步失败：'+(e.message||e));
+  }finally{ _syncBusy=false; }
+}
+function scheduleSync(){   // 改动落盘后 15s 自动上传（去抖），避免每答一题都打 GitHub
+  if(cloud.hold||!cloud.key||!cloud.token) return;
+  clearTimeout(_syncTimer);
+  _syncTimer=setTimeout(function(){ cloudSync(true); },15000);
+}
+function cloudSetupKey(){
+  const cur=cloud.key||'';
+  const v=prompt('同步码（换设备输入同一个码即可共享记录）\n留空 = 自动生成新码；新码就是新的云端文件',cur);
+  if(v==null) return;
+  let k=v.trim();
+  if(!k) k=newSyncKey();
+  if(!/^[a-z0-9_-]{6,40}$/i.test(k)) return alert('同步码只能是字母、数字、- 或 _，6–40 位');
+  cloud.key=k; cloud.sha=''; saveCloud(); renderAll();
+  if(!cur||cur!==k) alert('同步码：'+k+'\n\n复制保存，其他设备输入它就能看到同一份错题/成绩。');
+}
+function cloudSetupToken(){
+  const v=prompt('GitHub Token（fine-grained，仅本仓库 Contents: Read and write）\n留空 = 不变；输入 - = 清除（清除后只能只读拉取）','');
+  if(v==null) return;
+  const t=v.trim();
+  if(t==='-'){ cloud.token=''; saveCloud(); renderAll(); return; }
+  if(!t) return;
+  cloud.token=t; saveCloud(); renderAll();
+  alert('Token 已只保存在本机浏览器。注意：别在公用电脑上设置。');
+}
+function cloudBar(){
+  const on=!!cloud.key, tk=!!cloud.token;
+  return '<div class="panel"><div class="panel-h">云端同步 · 多设备'
+    +'<span id="cloudState">'+esc(cloud.state||(on?(tk?'已设置':'只读'):'未设置'))+'</span></div>'
+    +'<div style="padding:11px 14px;font-size:12.5px;line-height:1.85;color:#5b6270">'
+    +'<div>同步码：<b style="font-family:ui-monospace,Consolas,monospace;color:#2c3140">'
+      +(on?esc(cloud.key.slice(0,6)+'…'+cloud.key.slice(-4)):'—')+'</b>'
+      +'　Token：'+(tk?'<b style="color:#12a150">已设置</b>':'未设置')+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">'
+      +'<button class="btn pri" onclick="cloudSync(false)">立即同步</button>'
+      +'<button class="btn line" onclick="cloudSetupKey()">'+(on?'改同步码':'生成同步码')+'</button>'
+      +'<button class="btn line" onclick="cloudSetupToken()">设置 Token</button>'
+      +'<button class="btn line" onclick="cloudPull(false).then(renderAll).catch(function(e){alert(e.message)})">仅拉取</button>'
+    +'</div>'
+    +'<div style="color:#98a0ad;font-size:11.5px;line-height:1.7;margin-top:8px">'
+      +'错题 / 收藏 / 成绩按时间戳合并（新的赢，删除也会同步），换设备填同一同步码即可。'
+      +'文件放在公开仓库的 <code>records/</code> 里，同步码等于文件名的一部分，别用真实姓名。'
+      +'上传要 Token（只授本仓库 Contents 读写），只存本机浏览器。'
+    +'</div></div></div>';
+}
 /* ================= 移动端抽屉 / 底部导航 ================= */
 function openDrawer(){
   var sd=document.querySelector('.side'), mk=document.getElementById('mask');
@@ -430,9 +600,10 @@ function exportList(kind){
 }
 function clearList(kind){
   if(!confirm('确定清空？此操作不可撤销')) return;
+  Object.keys(store[kind]||{}).forEach(function(tid){ untouch(kind,tid); });
   store[kind]={}; save(); renderAll();
 }
-function removeFrom(kind,tid){ delete store[kind][tid]; save(); renderAll(); }
+function removeFrom(kind,tid){ delete store[kind][tid]; untouch(kind,tid); save(); renderAll(); }
 
 function renderRecordPanel(head,wrap,tools){
   tools.style.display='none';
@@ -451,7 +622,8 @@ function renderRecordPanel(head,wrap,tools){
     const okN=Object.values(store.done).filter(function(x){return x==='ok'}).length;
     const avg=sc.length?Math.round(sc.reduce(function(a,x){return a+(x.full?x.score/x.full:0)},0)/sc.length*100):0;
     const best=sc.length?Math.max.apply(null,sc.map(function(x){return x.full?Math.round(x.score/x.full*100):0})):0;
-    let h='<div class="statgrid">'
+    let h=cloudBar()
+      +'<div class="statgrid">'
       +'<div class="statc"><b>'+dn+'</b><span>已刷 / '+DB.meta.total+'</span></div>'
       +'<div class="statc"><b>'+(dn?pct(okN,dn):0)+'%</b><span>总正确率</span></div>'
       +'<div class="statc"><b>'+sc.length+'</b><span>交卷次数</span></div>'
@@ -505,7 +677,7 @@ function renderRecordPanel(head,wrap,tools){
 const S = { nav:'sets', mode:'practice', quiz:null, idx:0, answers:{}, revealed:{}, submitted:false,
             sideBook:null, openTree:new Set(), editNote:null, qIndex:null, hist:[] };
 
-function save(){ try{localStorage.setItem(LS_STORE,JSON.stringify(store))}catch(e){} }
+function save(){ try{localStorage.setItem(LS_STORE,JSON.stringify(store))}catch(e){} scheduleSync(); }
 function saveNotes(){ try{localStorage.setItem(LS_NOTE,JSON.stringify(notes))}catch(e){} }
 function load(){ try{const s=localStorage.getItem(LS_STORE); if(s) store=Object.assign(store,JSON.parse(s));}catch(e){}
                  try{const n=localStorage.getItem(LS_NOTE); if(n) notes=JSON.parse(n)||{};}catch(e){} }
@@ -636,7 +808,7 @@ async function loadData(){
 
 /* ================= 启动 ================= */
 (async function boot(){
-  load();
+  load(); loadCloud();
   try{
     Object.assign(DB, await loadData());
     const vt=document.getElementById('verTag');
@@ -647,6 +819,7 @@ async function loadData(){
     const _sp=new URLSearchParams(location.search);
     if(_sp.get('synctest')) SYNC.baseUrl=_sp.get('synctest');
     checkUpdate();
+    if(cloud.key&&cloud.token) setTimeout(function(){ cloudSync(true); },1200);
     const h=(location.hash||'').slice(1);
     if(location.search.indexOf('quiz')>=0){
       startQuizBySet(0,0);
@@ -894,14 +1067,14 @@ function pick(k){
 }
 function rec(tid,arr){
   const q=DB.questions[tid], ok=isRight(q,arr);
-  store.done[tid]= ok?'ok':'no';
-  if(ok){ delete store.wrong[tid]; delete (store.dk||{})[tid]; } else hitWrong(tid);
+  store.done[tid]= ok?'ok':'no'; stamp('done',tid);
+  if(ok){ delete store.wrong[tid]; untouch('wrong',tid); delete (store.dk||{})[tid]; untouch('dk',tid); } else hitWrong(tid);
   save();
 }
 function dontKnow(){
   if(!S.quiz) return;
   const tid=S.quiz.ids[S.idx], q=DB.questions[tid];
-  store.dk=store.dk||{}; store.dk[tid]=1; hitWrong(tid); store.done[tid]='no'; save();
+  store.dk=store.dk||{}; store.dk[tid]=1; stamp('dk',tid); hitWrong(tid); store.done[tid]='no'; stamp('done',tid); save();
   const rel=sameKaodian(tid);
   if(!rel.length){ alert('这个考点只有这一道题（题库里没有同类题）'); renderAll(); return; }
   startQuiz(rel,'同考点：'+(q.kaodian||''));
@@ -930,7 +1103,7 @@ function openRel(fromTid, target){
 function revealNow(){ if(!S.quiz) return; S.revealed[S.quiz.ids[S.idx]]=true; renderAll(); }
 function prev(){ if(S.quiz&&S.idx>0){S.idx--;closeNote();renderAll();} }
 function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){S.idx++;closeNote();renderAll();} }
-function toggleFav(tid){ if(store.fav[tid]) delete store.fav[tid]; else store.fav[tid]=1; save(); renderAll(); }
+function toggleFav(tid){ if(store.fav[tid]){ delete store.fav[tid]; untouch('fav',tid); } else { store.fav[tid]=1; stamp('fav',tid); } save(); renderAll(); }
 
 /* ================= 笔记 ================= */
 function editNote(tid, kind, anchor){
@@ -1021,9 +1194,9 @@ function submit(){
   ids.forEach(t=>{
     const q=DB.questions[t], pt=q.type==='多选'?2:1; full+=pt;
     const a=S.answers[t]||[];
-    if(!a.length){ blank++; store.done[t]='no'; hitWrong(t); return; }
-    if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; delete store.wrong[t]; }
-    else { noN++; store.done[t]='no'; hitWrong(t); }
+    if(!a.length){ blank++; store.done[t]='no'; stamp('done',t); hitWrong(t); return; }
+    if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; stamp('done',t); delete store.wrong[t]; untouch('wrong',t); }
+    else { noN++; store.done[t]='no'; stamp('done',t); hitWrong(t); }
   });
   save(); recordScore({ts:Date.now(),title:S.quiz.title,score:sc,full:full,ok:okN,no:noN,blank:blank,n:ids.length,mode:S.mode}); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
   const m=document.createElement('div'); m.className='modal';
