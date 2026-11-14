@@ -312,7 +312,11 @@ async function checkUpdate(){
     if(!vr.ok) return;
     const v=await vr.json();
     const cur=(DB.meta&&DB.meta.version)||'';
-    if(!v.version || v.version===cur) return;
+    const curB=(DB.meta&&DB.meta.built)||'';
+    const curN=(DB.meta&&DB.meta.total)||0;
+    // version / built / total 任一变化都算更新（同一天多次 rebuild 时 version 不变）
+    if(!v.version) return;
+    if(v.version===cur && (v.built||'')===curB && (v.total||0)===curN) return;
     const dr=await fetch(base+'/'+(v.file||'d.json.gz')+'?t='+Date.now(),{cache:'no-store'});
     if(!dr.ok) return;
     const txt=await gunzipBuf(await dr.arrayBuffer());
