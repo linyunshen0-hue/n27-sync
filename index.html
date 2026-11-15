@@ -1903,13 +1903,13 @@ function bindOptEvents(tid){
   const box=document.querySelector('#qwrap .opts'); if(!box) return;
   box.querySelectorAll('.opt').forEach(function(el){
     const start=function(){ clearTimeout(_lpt); _lpEl=el;
-      _lpt=setTimeout(function(){ _lpFired=Date.now(); toggleExclOpt(tid,+el.dataset.k);
+      _lpt=setTimeout(function(){ _lpFired=Date.now(); toggleExclOpt(tid,el.dataset.k);
         try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} },550); };
     const stop=function(){ clearTimeout(_lpt); };
     el.addEventListener('touchstart',start,{passive:true});
     el.addEventListener('mousedown',start);
     ['touchend','touchmove','touchcancel','mouseup','mouseleave'].forEach(function(ev){ el.addEventListener(ev,stop); });
-    el.addEventListener('contextmenu',function(e){ e.preventDefault(); if(Date.now()-_lpFired<400) return; toggleExclOpt(tid,+el.dataset.k); });
+    el.addEventListener('contextmenu',function(e){ e.preventDefault(); if(Date.now()-_lpFired<400) return; toggleExclOpt(tid,el.dataset.k); });
   });
 }
 function pick(k){
