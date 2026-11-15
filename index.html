@@ -1964,11 +1964,24 @@ let _cmtCache={};
 /* 旧版（本机后端/口令时代）的 token 不是 JWT，发给 Supabase 会报
    “Expected 3 parts in JWT; got 1”并拖垮整个评论，所以一律只认三段式 JWT */
 function _isJwt(t){ return typeof t==='string' && t.length>40 && t.split('.').length===3; }
+function jwtPayload(t){
+  try{
+    var p=String(t).split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    while(p.length%4) p+='=';
+    return JSON.parse(atob(p))||{};
+  }catch(e){ return {}; }
+}
+/* 当前登录用户的 uid：优先 user.uid，其次从 JWT 的 sub 里拿（旧路径可能没存 uid） */
+function cmtUid(){
+  if(CMT.user&&CMT.user.uid) return String(CMT.user.uid);
+  if(CMT.user&&_isJwt(CMT.user.token)){ const p=jwtPayload(CMT.user.token); return String(p.sub||p.user_id||''); }
+  return '';
+}
 function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null');
   if(u&&u.token&&_isJwt(u.token)) CMT.user=u;
   else if(u&&u.token){ try{localStorage.removeItem(LS_CMT)}catch(e){} console.warn('[评论] 清掉了旧版/损坏的登录 token（不是 Supabase JWT），请重新登录'); }
 }catch(e){} }
-function cmtSaveUser(u){ CMT.user=u; try{localStorage.setItem(LS_CMT,JSON.stringify(u))}catch(e){} }
+function cmtSaveUser(u){ if(u&&!u.uid&&_isJwt(u.token)) u.uid=jwtPayload(u.token).sub||''; CMT.user=u; try{localStorage.setItem(LS_CMT,JSON.stringify(u))}catch(e){} }
 function cmtLogout(){ CMT.user=null; CMT.me=null; try{localStorage.removeItem(LS_CMT)}catch(e){} }
 function cmtCacheLoad(){ try{_cmtCache=JSON.parse(localStorage.getItem(LS_CMTC)||'{}')||{};}catch(e){_cmtCache={}} }
 function cmtCacheSave(){
@@ -2177,7 +2190,7 @@ async function supaRpc(fn, args, retried){
   }
   // access token 默认 1 小时过期 → 401 时用 refresh_token 续一次再重试
   if (r.status === 401 && !retried && await supaRefresh()) return supaRpc(fn, args, true);
-  if (!r.ok) throw new Error(msg);
+  if (!r.ok) throw new Error(msg + ' (HTTP ' + r.status + ')');
   return j;
 }
 
@@ -2445,7 +2458,7 @@ function cmtRender(){
 }
 function cmtItem(c, zone, idx, total){
   const me=CMT.me||{};
-  const isMine=CMT.user&&c.uid===CMT.user.uid;
+  const _uid=cmtUid(); const isMine=!!_uid&&String(c.uid)===_uid;
   const d=new Date(c.ts);
   const ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const rep=c.reply_to?cmtById(c.reply_to):null;
@@ -2496,18 +2509,24 @@ async function cmtReact(cid,kind){
     }
   }
 }
-async function cmtDel(cid){
-  if(!confirm('删除这条评论？')) return;
+function cmtDel(cid){
   const i=(CMT.list||[]).findIndex(function(x){return x.id===cid});
-  try{ await cmtApi('/api/c/'+cid,{method:'DELETE'}); await cmtRefresh(false); }
-  catch(e){
-    if(cmtOfflineErr(e)){
-      if(i>=0){ CMT.list.splice(i,1); cmtRender(); }
-      cmtOpsAdd({type:'del',cid:cid,ts:Date.now()});
-      setCmtState('已删除，联网后同步');
-      cmtScheduleFlush();
-    }else alert(e.message);
-  }
+  uiConfirm('删除这条评论？', async function(){
+    try{ await cmtApi('/api/c/'+cid,{method:'DELETE'}); await cmtRefresh(false); }
+    catch(e){
+      const m=String((e&&e.message)||'');
+      if(cmtOfflineErr(e)){
+        if(i>=0){ CMT.list.splice(i,1); cmtRender(); }
+        cmtOpsAdd({type:'del',cid:cid,ts:Date.now()});
+        setCmtState('已删除，联网后同步');
+        cmtScheduleFlush();
+      }else if(/只能删除自己的评论/.test(m)){
+        alert('这条评论是另一个账号发的（你可能重新注册过），当前登录：'
+          +((CMT.user&&CMT.user.nick)||'未登录')
+          +'\n\n要删它，请登录当初发评论的那个账号。');
+      }else alert('删除失败：'+m);
+    }
+  }, {title:'删除评论', okText:'删除', danger:true});
 }
 function cmtReply(cid){
   CMT.replyTo=cid; cmtRender();
