@@ -783,7 +783,7 @@ function scheduleSync(){   // 只在「交卷后」或手动点同步按钮时�
   _syncTimer=setTimeout(function(){ cloudSync(true); },20000);
 }
 /* 评论账号登录后就能同步进度（服务端），无需 GitHub Token */
-function cmtAuthed(){ try{ return !!(CMT.user && CMT.user.token); }catch(e){ return false; } }
+function cmtAuthed(){ try{ return !!(CMT.user && _isJwt(CMT.user.token)); }catch(e){ return false; } }
 /* 评论账号 ⇄ 云端同步码：登录评论账号后，同步码自动用 u-<uid>，不用再手抄 14 位 */
 function cloudUserKey(uid){ return ('u-'+String(uid||'').toLowerCase()).replace(/[^a-z0-9_-]/g,'').slice(0,40); }
 async function cloudBindUser(uid){
@@ -1961,7 +1961,13 @@ const LS_CMT='cd27_cmt_v1', LS_CMTC='cd27_cmtc_v1', LS_CMTQ='cd27_cmtq_v1', LS_C
 const CMT={ base:'', ready:false, tid:null, list:[], me:null, user:null, replyTo:null, draft:'', loading:false, q:[], ops:[] };
 let _cmtCache={};
 
-function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null'); if(u&&u.token) CMT.user=u;}catch(e){} }
+/* 旧版（本机后端/口令时代）的 token 不是 JWT，发给 Supabase 会报
+   “Expected 3 parts in JWT; got 1”并拖垮整个评论，所以一律只认三段式 JWT */
+function _isJwt(t){ return typeof t==='string' && t.length>40 && t.split('.').length===3; }
+function cmtLoadUser(){ try{const u=JSON.parse(localStorage.getItem(LS_CMT)||'null');
+  if(u&&u.token&&_isJwt(u.token)) CMT.user=u;
+  else if(u&&u.token){ try{localStorage.removeItem(LS_CMT)}catch(e){} console.warn('[评论] 清掉了旧版/损坏的登录 token（不是 Supabase JWT），请重新登录'); }
+}catch(e){} }
 function cmtSaveUser(u){ CMT.user=u; try{localStorage.setItem(LS_CMT,JSON.stringify(u))}catch(e){} }
 function cmtLogout(){ CMT.user=null; CMT.me=null; try{localStorage.removeItem(LS_CMT)}catch(e){} }
 function cmtCacheLoad(){ try{_cmtCache=JSON.parse(localStorage.getItem(LS_CMTC)||'{}')||{};}catch(e){_cmtCache={}} }
@@ -2157,14 +2163,21 @@ async function supaRefresh(){
 
 async function supaRpc(fn, args, retried){
   const h = { 'Content-Type': 'application/json', apikey: SUPA.key };
-  if (CMT.user && CMT.user.token) h.Authorization = 'Bearer ' + CMT.user.token;
+  if (CMT.user && _isJwt(CMT.user.token)) h.Authorization = 'Bearer ' + CMT.user.token;
   const r = await supaFetch(SUPA.url + '/rest/v1/rpc/' + fn, {
     method: 'POST', headers: h, body: JSON.stringify(args || {}), cache: 'no-store'
   }, 8000);
   let j = {}; try { j = await r.json(); } catch (e) {}
+  const msg = j.message || j.hint || j.error || ('HTTP ' + r.status);
+  // 旧/损坏的 token：清掉登录态，按未登录重试一次（评论仍可读可发）
+  if (!r.ok && !retried && /JWT|jwt|invalid claim|malformed/i.test(String(msg))) {
+    cmtLogout();
+    try { setCmtState('登录状态已过期，已自动退出，请重新登录'); } catch (e) {}
+    return supaRpc(fn, args, true);
+  }
   // access token 默认 1 小时过期 → 401 时用 refresh_token 续一次再重试
   if (r.status === 401 && !retried && await supaRefresh()) return supaRpc(fn, args, true);
-  if (!r.ok) throw new Error(j.message || j.hint || j.error || ('HTTP ' + r.status));
+  if (!r.ok) throw new Error(msg);
   return j;
 }
 
@@ -2255,7 +2268,7 @@ async function cmtApi(path, opt){
     return { ok: true, nick: j.nick };
   }
   if (path === '/api/pass') {
-    const u = CMT.user; if (!u || !u.token) throw new Error('请先登录');
+    const u = CMT.user; if (!u || !_isJwt(u.token)) throw new Error('请先登录');
     const r = await supaFetch(SUPA.url + '/auth/v1/user', {
       method: 'PUT',
       headers: { apikey: SUPA.key, Authorization: 'Bearer ' + u.token, 'Content-Type': 'application/json' },
@@ -2556,7 +2569,7 @@ let _flushing=false, _flushTimer=null;
 async function cmtFlushQueue(silent){
   const nq=(CMT.q||[]).length, no=(CMT.ops||[]).length;
   if(_flushing || (!nq && !no)) return 0;
-  if(!CMT.user || !CMT.user.token) return 0;      // 没登录不能代发
+  if(!cmtAuthed()) return 0;      // 没登录（或旧版坏 token）不能代发
   _flushing=true; let n=0, m=0;
   try{
     if(!CMT.ready && !(await cmtInit())) return 0;
