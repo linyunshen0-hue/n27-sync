@@ -1092,6 +1092,18 @@ function openSetDetail(bi,si){
   renderAll();
 }
 function startSetQuiz(){ const v=S.setView; if(!v) return; S.setView=null; startQuizBySet(v.bi,v.si); }
+/* 重做整套卷：只清作答/判定（错题本、收藏、斩题一个不动） */
+function redoSet(bi,si){
+  const b=DB.books[bi]||{}, s=(b.sets||[])[si]||{items:[]};
+  const ids=(s.items||[]).filter(function(t){ return !zhanOn(t); });
+  if(!ids.length) return;
+  const n=ids.filter(function(t){ return store.done[t]; }).length;
+  uiConfirm('重做「'+s.set+'」（'+ids.length+' 题）？\n\n只清空作答和判定（已作答 '+n+' 条），错题本/收藏/斩题都不动。', function(){
+    ids.forEach(function(t){ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done){ delete store.done[t]; untouch('done',t); } });
+    S.submitted=false; if(S.quiz){ S.idx=0; S._lastTid=null; }
+    save(); renderAll();
+  }, {title:'重做本卷', okText:'重做'});
+}
 function renderSetView(head,wrap,tools){
   tools.style.display='none';
   const v=S.setView, b=DB.books[v.bi]||{}, s=(b.sets||[])[v.si]||{items:[],set:''};
@@ -1115,6 +1127,7 @@ function renderSetView(head,wrap,tools){
     +'<div class="setcard"><div class="m" style="margin-top:0"><span>总 '+ids.length+' 题</span><span>已刷 '+dnN+'</span><span>收藏 '+fv.length+'</span>'+(zh?'<span>已斩 '+zh+'</span>':'')+'</div>'
     +'<div class="b">'
     +'<button class="btn pri" onclick="startSetQuiz()">开始刷本卷</button>'
+    +'<button class="btn" onclick="redoSet('+v.bi+','+v.si+')" title="重做本卷：只清作答和判定，错题本/收藏/斩题都不动">↺ 重做本卷</button>'
     +(wr.length?'<button class="btn" onclick="startQuiz('+lj(wr)+',\'本卷错题\',null,false,true)">只刷本卷错题 '+wr.length+'</button>':'')
     +'<button class="btn line" onclick="S.setView=null;S.quiz=null;S.rectab=\'wrong\';S.wrongOnlySet=false;switchNav(\'record\')">去错题本 ›</button>'
     +'</div></div>';
@@ -1412,7 +1425,7 @@ function sideSets(){
       const on=S.quiz&&S.quiz.title===b.name+' '+s.set;
       h+=`<div class="li ${on?'on':''}" onclick="startQuizBySet(${S.sideBook},${i})">
         <span class="t">${esc(s.set)}</span><span class="bar"><i style="width:${pct(n,s.count)}%"></i></span><span class="c">${n}/${s.count}</span>
-        <span class="setd" title="本卷详情：错题/收藏/斩题" onclick="event.stopPropagation();openSetDetail(${S.sideBook},${i})">›</span></div>`;
+        <span class="setd" title="本卷详情：重做 / 本卷错题 / 本卷收藏" onclick="event.stopPropagation();openSetDetail(${S.sideBook},${i})">›</span></div>`;
     });
     return h;
   }
@@ -1675,6 +1688,7 @@ function renderMain(){
     <button class="btn" onclick="next()" ${i===ids.length-1?'disabled':''}>下一题 →</button>
     <button class="btn danger" onclick="dontKnow()" title="标记不会，并直接刷同考点">😵 不会</button>
     <div class="grow"></div>
+    <button class="btn" onclick="resetQuiz()" title="重做当前这套（只清作答和判定，错题本/收藏/斩题不动）">↻ 重做</button>
     <button class="btn" onclick="revealNow()" ${revealed?'disabled':''}>看解析 <kbd>空格</kbd></button>
     <button class="btn pri" onclick="submit()">交卷</button></div>`;
 }
