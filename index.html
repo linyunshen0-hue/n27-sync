@@ -465,6 +465,21 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
 .wrow .n{flex:0 0 22px;color:#b3bac5;font-size:11px;text-align:right}
 .homegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 0 14px}
 @media (max-width:700px){.homegrid{grid-template-columns:repeat(2,1fr)}}
+/* ===== 视图 tab 条（照苍盾：全部/错题本/收藏/已斩/未做/笔记/今日·7天·30天） ===== */
+.vtabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px;border-bottom:1px solid var(--line);
+  background:#fff;position:sticky;top:0;z-index:6;-webkit-overflow-scrolling:touch}
+.vtabs::-webkit-scrollbar{height:0}
+.vtabs .vt{flex:0 0 auto;font:600 12.5px/1 system-ui;border:1px solid var(--line);background:#fff;color:#5b6270;
+  border-radius:999px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.vtabs .vt:hover{border-color:#b9c6d8}
+.vtabs .vt.on{background:var(--pri);border-color:var(--pri);color:#fff}
+.vtabs .vt b{font-weight:700;opacity:.85;margin-left:4px}
+.vtabs .sp{flex:1 0 6px}
+.batchrow{border-top:1px solid #f2f4f7;padding:10px 13px}
+.batchrow .bt{font-size:13px;font-weight:600}
+.batchrow .bm{font-size:11.5px;color:var(--muted);margin:3px 0 7px}
+.batchrow .bb{display:flex;gap:7px;flex-wrap:wrap}
+
 /* ===== 苍盾风格答题页（第10条） ===== */
 :root{--cd-grad:linear-gradient(135deg,#33b5e6 0%,#1cc8b4 100%);}
 /* 卷头：绿竖条卷名 + 青蓝序号 */
@@ -564,6 +579,7 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
   </aside>
 
   <main class="main">
+    <div class="vtabs" id="vtabs"></div>
     <div class="main-head" id="mainhead"></div>
     <div class="qwrap" id="qwrap"><div class="loading"><span class="spin"></span>加载题库…</div></div>
     <div class="tools" id="tools" style="display:none"></div>
@@ -600,7 +616,7 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
 /* ================= 数据 ================= */
 const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
 const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
-let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{}, zhan:{} };   // dk=不会；mt/del=同步时间戳；zhan=已斩（不再出现）
+let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{}, zhan:{}, daily:{}, batches:[] };   // dk=不会；mt/del=同步时间戳；zhan=已斩（不再出现）
 let notes = {};
 /* ================= 成绩记录 / 错题·收藏库 ================= */
 const LS_SCORE='cs3_scores_v1';
@@ -654,21 +670,181 @@ function toggleWrong(tid){
   else { store.wrong[tid]=Number(store.wrong[tid])||1; stamp('wrong',tid); }
   save(); renderAll();
 }
-/* 做题页的「↺ 重做本题」：只清本题作答，错题本/收藏/斩都不动 */
-function redoOne(tid){
-  delete S.answers[tid]; delete S.revealed[tid]; if(S.judged) delete S.judged[tid];
-  if(store.done){ delete store.done[tid]; untouch('done',tid); }
-  S.submitted=false; save(); renderAll();
+/* ================= 统一的「重做」与「视图列表」 =================
+   原来有 4 个重做入口（resetQuiz / redoSet / redoList / redoOne）→ 收成一个 redoIds。
+   铁律：重做只清作答/判定；错题本、收藏、斩题一律不动。 */
+function clearWork(ids){
+  ids.forEach(function(t){
+    delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t];
+    if(store.done){ delete store.done[t]; untouch('done',t); }
+  });
+  S.submitted=false;
 }
-/* 列表页的「↺ 重做这一批」：只清作答，错题本/收藏/斩都不动 */
-function redoList(kind){
-  const ids=(kind==='wrong'?Object.keys(store.wrong||{}):kind==='fav'?Object.keys(store.fav||{}):Object.keys(store.dk||{}));
+/* 直接重做（做题页的「↺ 重做本题」用，不弹窗） */
+function redoOne(tid){ clearWork([tid]); save(); renderAll(); }
+/* 带确认的重做：ids 为空则不动；label 是给人看的名字 */
+function redoIds(ids,label,opt){
+  ids=(ids||[]).filter(Boolean);
   if(!ids.length) return;
   const n=ids.filter(function(t){ return store.done[t]; }).length;
-  uiConfirm('重做这 '+ids.length+' 题？\n\n只清空作答和判定（'+n+' 条），错题本/收藏/斩题都不动。', function(){
-    ids.forEach(function(t){ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done){ delete store.done[t]; untouch('done',t); } });
-    S.submitted=false; save(); renderAll();
+  uiConfirm('重做'+(label?'「'+label+'」':'')+'（'+ids.length+' 题）？\n\n只清空作答和判定（已作答 '+n+' 条），错题本/收藏/斩题都不动。', function(){
+    clearWork(ids);
+    if(opt&&opt.back){ S.quiz=null; S.idx=0; S._lastTid=null; }
+    save(); renderAll();
   }, {title:'重做', okText:'重做'});
+}
+
+/* ---- 视图 → 题号列表（错题本/收藏/已斩/未做/笔记全部走这一个） ---- */
+const VIEW_NAME={all:'全部题',wrong:'错题本',fav:'收藏本',cut:'已斩',todo:'未做',dk:'不会',note:'笔记',batch:'刷题记录'};
+/* ---- 按天记录（今日错 / 近7天错 / 近30天错 用） ---- */
+function dateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dailyMark(tid,ok){
+  store.daily=store.daily||{};
+  const k=dateKey();
+  (store.daily[k]=store.daily[k]||{})[tid]= ok?1:0;
+}
+function dailyWrongSince(n){
+  const set={};
+  for(let i=0;i<n;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const day=store.daily&&store.daily[dateKey(d)];
+    if(!day) continue;
+    Object.keys(day).forEach(function(t){ if(!day[t]) set[t]=1; });
+  }
+  return set;
+}
+/* ---- 视图 tab ---- */
+const VTABS=[['all','全部'],['wrong','错题本'],['fav','收藏'],['cut','已斩'],['todo','未做'],['note','笔记'],['tw','今日错'],['w7','近7天'],['w30','近30天']];
+function setView(v){
+  S.view=v||'all'; S.listMode=true; S.quiz=null; S.setView=null; S.idx=0;
+  if(typeof closeDrawer==='function') closeDrawer();
+  renderAll();
+}
+function renderVTabs(){
+  const el=document.getElementById('vtabs'); if(!el) return;
+  const cnt={wrong:viewIds('wrong').length,fav:viewIds('fav').length,cut:Object.keys(store.zhan||{}).length,note:viewIds('note').length};
+  let h='';
+  VTABS.forEach(function(t){
+    const k=t[0], n=cnt[k];
+    h+='<button class="vt'+(S.listMode&&S.view===k?' on':'')+'" data-v="'+k+'" onclick="setView(this.dataset.v)">'+t[1]
+      +(n?'<b>'+n+'</b>':'')+'</button>';
+  });
+  h+='<span class="sp"></span>';
+  h+='<button class="vt" onclick="redoList()">↺ 重做</button>';
+  el.innerHTML=h;
+}
+/* ---- 刷题记录（批次） ---- */
+function saveBatch(){
+  const ids=(S.listIds||[]).slice();
+  if(!ids.length){ alert('当前范围没有题目'); return; }
+  const wrong=ids.filter(function(t){ return store.done[t]==='no'; });
+  store.batches=store.batches||[];
+  store.batches.unshift({id:'b'+Date.now(),ts:Date.now(),name:(VIEW_NAME[S.view]||'范围'),qids:ids,wrong:wrong});
+  if(store.batches.length>20) store.batches.length=20;
+  save(); alert('已存为刷题记录：'+(VIEW_NAME[S.view]||'范围')+' · '+ids.length+' 题 · 本次错题 '+wrong.length+' 题');
+  renderAll();
+}
+function startBatch(el){
+  const b=(store.batches||[]).filter(function(x){ return x.id===el.dataset.bid; })[0];
+  if(!b) return;
+  const ids=el.dataset.act==='wrong'?(b.wrong||[]):(b.qids||[]);
+  if(!ids.length) return alert('这份记录里没有错题');
+  startQuiz(ids, b.name+(el.dataset.act==='wrong'?' · 本次错题':' · 本次全部'), null, false, true);
+}
+function delBatch(el){
+  store.batches=(store.batches||[]).filter(function(x){ return x.id!==el.dataset.bid; });
+  save(); renderAll();
+}
+function batchPanelHtml(){
+  const bs=store.batches||[];
+  if(!bs.length) return '';
+  let h='<div class="panel" style="margin-top:10px"><div class="panel-h">📋 刷题记录<span>'+bs.length+' 份</span></div>';
+  bs.forEach(function(b){
+    const d=new Date(b.ts);
+    h+='<div class="batchrow"><div class="bt">'+esc(b.name)+'</div>'
+      +'<div class="bm">'+(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')
+      +' · '+b.qids.length+' 题 · 错 '+(b.wrong||[]).length+'</div>'
+      +'<div class="bb"><button class="btn" data-bid="'+b.id+'" data-act="wrong" onclick="startBatch(this)">只做本次错题 '+(b.wrong||[]).length+'</button>'
+      +'<button class="btn line" data-bid="'+b.id+'" data-act="all" onclick="startBatch(this)">做本次全部 '+b.qids.length+'</button>'
+      +'<button class="btn line" data-bid="'+b.id+'" onclick="delBatch(this)">删</button></div></div>';
+  });
+  return h+'</div>';
+}
+/* ---- 列表视图（顶栏 tab 点开后主区显示的东西） ---- */
+function renderList(head,wrap,tools){
+  tools.style.display='none'; head.innerHTML='';
+  const kind=S.view||'all';
+  const ids=viewIds(kind);
+  S.listIds=ids;
+  const name=VIEW_NAME[kind]||'题目';
+  const zhanN=Object.keys(store.zhan||{}).length;
+  const tip={wrong:'答错自动收进来；答对不会自动移出，点 ✕ 手动移出',fav:'题目上方 ☆ 收藏',
+    cut:'斩掉的题不参与刷题；点 ↺ 可恢复',todo:'还没作答的题',note:'有划线或笔记的题',
+    tw:'今天做错/没做对的题',w7:'近 7 天做错的题',w30:'近 30 天做错的题'}[kind]||'';
+  let h='<div style="max-width:880px;margin:0 auto">'
+    +'<div class="panel"><div class="panel-h">'+name+'<span>'+ids.length+' 题'+(tip?' · '+tip:'')+'</span></div>'
+    +'<div class="toolbar">'
+      +(ids.length?'<button class="btn pri" onclick="startQuiz(S.listIds,VIEW_NAME[S.view],null,false,true)">开始刷这 '+ids.length+' 题</button>'
+        +'<button class="btn" onclick="redoList()" title="只清作答记录，错题本/收藏/斩题都不动">↺ 重做</button>'
+        +'<button class="btn line" onclick="saveBatch()" title="把当前范围和本次错题存成一份刷题记录">📋 存为刷题记录</button>':'')
+      +(zhanN?'<button class="btn line" onclick="unzhanAll()">已斩 '+zhanN+' · 恢复</button>':'')
+    +'</div>'
+    +(ids.length?'<div class="qlist">'+ids.map(function(t){ return listRow(t,kind); }).join('')+'</div>'
+                :'<div class="empty" style="padding:24px">'+(tip||'这里还没有题')+'</div>')
+    +'</div>'+batchPanelHtml()+'</div>';
+  wrap.innerHTML=h;
+}
+
+function hasNoteAny(tid){
+  const ks=Object.keys(notes||{});
+  for(let i=0;i<ks.length;i++){ if(ks[i]===tid||ks[i].indexOf(tid+'|')===0) return true; }
+  return false;
+}
+function viewIds(kind,base){
+  const src=base||Object.keys(DB.questions||{});
+  let ids;
+  if(kind==='wrong') ids=src.filter(function(t){ return !!store.wrong[t]; });
+  else if(kind==='fav') ids=src.filter(function(t){ return !!store.fav[t]; });
+  else if(kind==='cut') ids=src.filter(function(t){ return zhanOn(t); });
+  else if(kind==='todo') ids=src.filter(function(t){ return !store.done[t]; });
+  else if(kind==='dk') ids=src.filter(function(t){ return !!(store.dk&&store.dk[t]); });
+  else if(kind==='note') ids=src.filter(function(t){ return hasNoteAny(t); });
+  else if(kind==='tw'||kind==='w7'||kind==='w30'){
+    const dn=(kind==='tw'?1:(kind==='w7'?7:30)), set=dailyWrongSince(dn);
+    ids=src.filter(function(t){ return !!set[t]; });
+  }
+  else ids=src.slice();
+  if(kind!=='cut') ids=ids.filter(function(t){ return !zhanOn(t); });   // 斩掉的从所有视图消失
+  const ord=qOrderMap();
+  return ids.sort(function(a,b){ return ((ord[a]===undefined?9e9:ord[a])-(ord[b]===undefined?9e9:ord[b])); });
+}
+/* ---- 统一的题目列表行（错题本/收藏/已斩/卷详情/批次共用） ---- */
+function listRow(tid,kind,i){
+  const q=DB.questions[tid]||{}, n=Number(store.wrong[tid])||0;
+  const title=String(q.title||'');
+  const st=store.done[tid];
+  const act=(kind==='cut')?'zhan':((kind==='wrong'||kind==='fav'||kind==='dk')?'remove':'');
+  const actTip=(kind==='cut')?'恢复（撤斩）':(kind==='wrong'?'移出错题本':kind==='fav'?'取消收藏':'移出');
+  return '<div class="qrow" data-tid="'+tid+'" data-kind="'+kind+'" onclick="listOpen(this)">'
+    +'<div class="qt"><span class="tag'+(st==='ok'?' g':st==='no'?' r':' gray')+'">'+(st==='ok'?'对':st==='no'?'错':'未')+'</span>'
+    +'<span class="tag gray">'+(q.type==='多选'?'多选':'单选')+'</span>'
+    +'<span>'+esc(title.slice(0,56))+(title.length>56?'…':'')+'</span></div>'
+    +'<div class="qm">'
+    +(q.kaodian?'<span class="kd">'+esc(q.kaodian)+'</span>':'')
+    +((kind==='wrong'||kind==='cut')&&n>1?'<span class="badge">错 '+n+' 次</span>':'')
+    +'<span class="sp"></span>'
+    +(act?'<button class="xbtn" data-act="'+act+'" title="'+actTip+'" onclick="event.stopPropagation();listAct(this)">'+(kind==='cut'?'↺':'✕')+'</button>':'')
+    +'</div></div>';
+}
+function listOpen(el){
+  const t=el.dataset.tid, k=el.dataset.kind;
+  startQuiz([t],VIEW_NAME[k]||'题目',null,false,true);
+}
+function listAct(el){
+  const row=el.closest('.qrow'); if(!row) return;
+  const t=row.dataset.tid, k=row.dataset.kind, a=el.dataset.act;
+  if(a==='zhan') toggleZhan(t);
+  else if(a==='remove') removeFrom(k,t);
 }
 
 /* ================= 云端同步（成绩 / 错题 / 收藏） =================
@@ -1094,6 +1270,7 @@ function openSetDetail(bi,si){
 function startSetQuiz(){ const v=S.setView; if(!v) return; S.setView=null; startQuizBySet(v.bi,v.si); }
 /* 重做整套卷：只清作答/判定（错题本、收藏、斩题一个不动） */
 function redoSet(bi,si){
+<<<<<<< HEAD
   const b=DB.books[bi]||{}, s=(b.sets||[])[si]||{items:[]};
   const ids=(s.items||[]).filter(function(t){ return !zhanOn(t); });
   if(!ids.length) return;
@@ -1104,6 +1281,14 @@ function redoSet(bi,si){
     save(); renderAll();
   }, {title:'重做本卷', okText:'重做'});
 }
+=======
+  const b=DB.books[bi]||{}, st=(b.sets||[])[si]||{items:[]};
+  const ids=(st.items||[]).filter(function(t){ return !zhanOn(t); });
+  redoIds(ids, st.set, {back:true});
+}
+/* 列表页的「↺ 重做」：用当前列表（S.listIds） */
+function redoList(){ redoIds(S.listIds||[], VIEW_NAME[S.rectab]); }
+>>>>>>> 499b72b (refactor(S1/S2): 列表/重做统一（viewIds+listRow+redoIds）；顶栏视图tab（全部/错题/收藏/已斩/未做/笔记/今日/7天/30天）；刷题记录批次；不会并入错题本)
 function renderSetView(head,wrap,tools){
   tools.style.display='none';
   const v=S.setView, b=DB.books[v.bi]||{}, s=(b.sets||[])[v.si]||{items:[],set:''};
@@ -1131,37 +1316,23 @@ function renderSetView(head,wrap,tools){
     +(wr.length?'<button class="btn" onclick="startQuiz('+lj(wr)+',\'本卷错题\',null,false,true)">只刷本卷错题 '+wr.length+'</button>':'')
     +'<button class="btn line" onclick="S.setView=null;S.quiz=null;S.rectab=\'wrong\';S.wrongOnlySet=false;switchNav(\'record\')">去错题本 ›</button>'
     +'</div></div>';
-  h+='<div class="wgrp"><div class="wgrp-h">本卷错题<span class="c">'+wr.length+' 题</span>'
-    +(wr.length?'<span class="go" onclick="startQuiz('+lj(wr)+',\'本卷错题\',null,false,true)">刷这组 ›</span>':'')+'</div>';
-  wr.forEach(function(t,i){
-    const q=DB.questions[t]||{}, n=Number(store.wrong[t])||0, rt=tidRate(t);
-    h+='<div class="wrow" onclick="startQuiz([\''+t+'\'],\'错题本\',null,false,true)"><span class="n">'+(i+1)+'</span>'
-      +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
-      +'<span class="badge">错 '+n+' 次</span>'
-      +(rt?'<span style="color:'+(rt.pct>=60?'#12a150':(rt.pct>=40?'#e08a00':'#d4380d'))+';font-weight:600;min-width:38px;text-align:right">'+rt.pct+'%</span>':'')
-      +'<button class="xbtn" title="移出错题本" onclick="event.stopPropagation();removeFrom(\'wrong\',\''+t+'\')">✕</button></div>';
-  });
-  if(!wr.length) h+='<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无错题</div>';
-  h+='</div>';
-  h+='<div class="wgrp"><div class="wgrp-h">本卷收藏<span class="c">'+fv.length+' 题</span>'
-    +(fv.length?'<span class="go" onclick="startQuiz('+lj(fv)+',\'本卷收藏\',null,false,true)">刷这组 ›</span>':'')+'</div>';
-  fv.forEach(function(t,i){
-    const q=DB.questions[t]||{};
-    h+='<div class="wrow" onclick="startQuiz([\''+t+'\'],\'收藏\',null,false,true)"><span class="n">'+(i+1)+'</span>'
-      +'<span style="flex:1">'+esc(String(q.title||'').slice(0,46))+((q.title||'').length>46?'…':'')+'</span>'
-      +'<button class="xbtn" title="取消收藏" onclick="event.stopPropagation();removeFrom(\'fav\',\''+t+'\')">✕</button></div>';
-  });
-  if(!fv.length) h+='<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无收藏（题目右上 ☆ 可收藏）</div>';
-  h+='</div>';
+  h+='<div class="panel-h" style="margin-top:6px">本卷错题<span>'+wr.length+' 题</span></div><div class="qlist">'
+    +wr.map(function(t){ return listRow(t,'wrong'); }).join('')
+    +(wr.length?'':'<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无错题</div>')
+    +'</div>';
+  h+='<div class="panel-h" style="margin-top:14px">本卷收藏<span>'+fv.length+' 题</span></div><div class="qlist">'
+    +fv.map(function(t){ return listRow(t,'fav'); }).join('')
+    +(fv.length?'':'<div style="padding:14px;font-size:12.5px;color:var(--muted)">本卷暂无收藏（题目上方 ☆ 可收藏）</div>')
+    +'</div>';
   wrap.innerHTML='<div style="max-width:840px;margin:0 auto">'+h+'</div>';
 }
 
 function renderRecordPanel(head,wrap,tools){
   tools.style.display='none';
   if(!S.rectab) S.rectab='stats';
-  const wr=Object.keys(store.wrong||{}), fv=Object.keys(store.fav||{}), dk=Object.keys(store.dk||{});
-  const cnt={stats:'',wrong:wr.length,fav:fv.length,dk:dk.length};
-  const tabs=[['stats','成绩统计'],['wrong','错题本'],['fav','收藏'],['dk','不会']];
+  const wr=Object.keys(store.wrong||{}), fv=Object.keys(store.fav||{});
+  const cnt={stats:'',wrong:wr.length,fav:fv.length};
+  const tabs=[['stats','成绩统计'],['wrong','错题本'],['fav','收藏']];
   head.innerHTML='<div class="seg" style="flex:0 0 auto">'+tabs.map(function(t){
       return '<button class="'+(S.rectab===t[0]?'on':'')+'" onclick="S.rectab=\''+t[0]+'\';renderAll()">'
         +t[1]+(cnt[t[0]]?' '+cnt[t[0]]:'')+'</button>';
@@ -1197,38 +1368,26 @@ function renderRecordPanel(head,wrap,tools){
     return;
   }
 
-  const rawIds=(S.rectab==='wrong'?wr:(S.rectab==='fav'?fv:dk));
-  const _ord=qOrderMap();
-  const zhanN=Object.keys(store.zhan||{}).length;
-  const ids=rawIds.filter(function(t){ return !zhanOn(t); })
-    .sort(function(a,b){ return ((_ord[a]===undefined?9e9:_ord[a])-(_ord[b]===undefined?9e9:_ord[b])); });
-  const title={wrong:'错题本',fav:'我的收藏',dk:'不会的题'}[S.rectab];
-  const tip={wrong:'答错会自动收进来；答对不会自动移出，要手动点 ✕ 移除',fav:'刷题时点题干右上角的 ☆ 收藏',dk:'刷题时点下方「不会」收进来'}[S.rectab];
+  const kind=S.rectab;
+  const ids=viewIds(kind);
+  const title=VIEW_NAME[kind]||'错题本';
+  const tip={wrong:'答错会自动收进来；答对不会自动移出，要手动点 ✕ 移除',fav:'刷题时点题干上方 ☆ 收藏',dk:'刷题时点下方「不会」收进来',note:'在题干里划线/写笔记后，这里能看到'}[kind]||'';
+  S.listIds=ids;
   if(!ids.length){
     wrap.innerHTML='<div class="empty" style="padding-top:56px"><div style="font-size:30px;margin-bottom:10px">📭</div>'+tip+'</div>';
     return;
   }
   const idsJson=JSON.stringify(ids).replace(/"/g,'&quot;');
   wrap.innerHTML='<div class="panel">'
-    +'<div class="panel-h">'+title+'<span>'+ids.length+' 题'+(rawIds.length>ids.length?'（已斩 '+(rawIds.length-ids.length)+'）':'')+'</span></div>'
+    +'<div class="panel-h">'+title+'<span>'+ids.length+' 题</span></div>'
     +'<div class="toolbar">'
-      +'<button class="btn pri" onclick="startQuiz('+idsJson+',\''+title+'\',null,false,true)">开始刷这 '+ids.length+' 题</button>'
-      +'<button class="btn" onclick="redoList(\''+S.rectab+'\')" title="重做：只清作答记录，错题本/收藏/斩题都不动">↺ 重做</button>'
-      +'<button class="btn line" onclick="exportList(\''+S.rectab+'\')">导出 JSON</button>'
-      +'<button class="btn line" onclick="clearList(\''+S.rectab+'\')">清空</button>'
-      +(zhanN?'<button class="btn line" onclick="unzhanAll()" title="把斩掉的题放回来">已斩 '+zhanN+' · 恢复</button>':'')
+      +'<button class="btn pri" onclick="startQuiz(S.listIds,VIEW_NAME[S.rectab],null,false,true)">开始刷这 '+ids.length+' 题</button>'
+      +'<button class="btn" onclick="redoList()" title="重做：只清作答记录，错题本/收藏/斩题都不动">↺ 重做</button>'
+      +'<button class="btn line" onclick="exportList(S.rectab)">导出 JSON</button>'
+      +'<button class="btn line" onclick="clearList(S.rectab)">清空</button>'
     +'</div><div class="qlist">'
-    +ids.map(function(tid){
-      const q=DB.questions[tid]||{}, n=Number(store.wrong[tid])||0;
-      const t=(q.title||'').slice(0,56);
-      return '<div class="qrow" onclick="startQuiz([\''+tid+'\'],\''+title+'\',null,false,true)">'
-        +'<div class="qt"><span class="tag">'+(q.type==='多选'?'多选':'单选')+'</span><span>'+esc(t)+((q.title||'').length>56?'…':'')+'</span></div>'
-        +'<div class="qm">'+(q.kaodian?'<span class="kd">'+esc(q.kaodian)+'</span>':'')
-        +(S.rectab==='wrong'&&n>1?'<span class="badge">错 '+n+' 次</span>':'')
-        +'<span class="sp"></span>'
-        +'<button class="xbtn" onclick="event.stopPropagation();removeFrom(\''+S.rectab+'\',\''+tid+'\')" title="'+(S.rectab==='wrong'?'移出错题本':(S.rectab==='fav'?'取消收藏':'移出'))+'">✕</button></div>'
-        +'</div>';
-    }).join('')+'</div></div>';
+    +ids.map(function(tid,i){ return listRow(tid,kind,i); }).join('')
+    +'</div></div>';
 }
 
 const S = { nav:'sets', mode:'practice', quiz:null, idx:0, answers:{}, revealed:{}, submitted:false,
@@ -1394,7 +1553,7 @@ async function loadData(){
   }
 })();
 
-function renderAll(){ renderSide(); renderMain(); renderDetail();
+function renderAll(){ renderVTabs(); renderSide(); renderMain(); renderDetail();
   // 评论区永远排在主区最下面（解析、口诀都在它上面）
   const _c=document.getElementById('cmtBox'); if(_c&&_c.parentNode) _c.parentNode.appendChild(_c);
   renderHstat();
@@ -1509,16 +1668,13 @@ function jumpNote(k){
 
 function sideRecord(){
   const dn=Object.keys(store.done).length, okN=Object.values(store.done).filter(x=>x==='ok').length;
-  const wr=Object.keys(store.wrong), fv=Object.keys(store.fav), dk=Object.keys(store.dk||{});
+  const wr=Object.keys(store.wrong), fv=Object.keys(store.fav);
   let h=`<div class="side-title">统计</div>
     <div class="li"><span class="t">已刷</span><span class="c">${dn} / ${DB.meta.total}</span></div>
     <div class="li"><span class="t">正确率</span><span class="c">${dn?pct(okN,dn):0}%</span></div>
     <div class="side-title">错题本</div>`;
   h+= wr.length?`<div class="li on" onclick="startQuiz(${esc(JSON.stringify(wr))},'错题本',null,false,true)"><span class="t">重刷错题</span><span class="c">${wr.length}</span></div>`
               :`<div class="empty" style="padding:8px">还没有错题</div>`;
-  h+=`<div class="side-title">不会的题</div>`;
-  h+= dk.length?`<div class="li" onclick="startQuiz(${esc(JSON.stringify(dk))},'不会的题',null,false,true)"><span class="t">重刷「不会」</span><span class="c">${dk.length}</span></div>`
-              :`<div class="empty" style="padding:8px">刷题时点「不会」会收进来</div>`;
   h+=`<div class="side-title">收藏</div>`;
   h+= fv.length?`<div class="li" onclick="startQuiz(${esc(JSON.stringify(fv))},'我的收藏',null,false,true)"><span class="t">重刷收藏</span><span class="c">${fv.length}</span></div>`
               :`<div class="empty" style="padding:8px">还没有收藏</div>`;
@@ -1541,6 +1697,7 @@ function startQuiz(ids,title,atTid,resetHist,fresh){ if(typeof closeDrawer==='fu
     if(S.hist.length>30) S.hist.shift();
   }
   // 注意：不重置 answers/revealed —— 它们按 tid 全局存，串题/返回都不丢作答
+  S.listMode=false; S.setView=null;
   S.quiz={ids:ids.slice(),title}; S.idx=atTid?Math.max(0,ids.indexOf(atTid)):0;
   S.submitted=false; closeNote(); renderAll();
 }
@@ -1560,6 +1717,7 @@ function renderMain(){
   let _lastTid=S._lastTid;
   const head=document.getElementById('mainhead'), wrap=document.getElementById('qwrap'), tools=document.getElementById('tools');
   if(S.setView){ renderSetView(head,wrap,tools); return; }
+  if(S.listMode){ renderList(head,wrap,tools); return; }
   if(S.nav==='record'&&!S.quiz){ renderRecordPanel(head,wrap,tools); return; }
   if(!S.quiz){
     head.innerHTML=''; tools.style.display='none';
@@ -1724,25 +1882,20 @@ function clearAnswer(){
 /* 重新刷题：清空本卷作答与判定（错题本、成绩记录不动） */
 function resetQuiz(){
   if(!S.quiz) return;
-  const ids=S.quiz.ids;
-  uiConfirm('重做本卷（'+ids.length+' 题）？\n\n只清空作答和判定；错题本/收藏/斩题都不动（错题要移出请在做题页点「✕ 移除错题」）。', function(){
-    ids.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done) delete store.done[t]; });
-    S.submitted=false; S.idx=0; S._lastTid=null;
-    save(); renderAll();
-  }, {title:'重做本卷', okText:'重做'});
+  redoIds(S.quiz.ids, S.quiz.title);
 }
 function rec(tid,arr){
   const q=DB.questions[tid], ok=isRight(q,arr);
   bumpStat(tid, ok);
-  store.done[tid]= ok?'ok':'no'; stamp('done',tid);
+  store.done[tid]= ok?'ok':'no'; stamp('done',tid); dailyMark(tid,ok);
   // 答对：只清「不会」标记，错题本保留（苍盾语义：错题只手动 ✕ 移除才退出）
-  if(ok){ if(store.dk&&store.dk[tid]){ delete store.dk[tid]; untouch('dk',tid); } } else hitWrong(tid);
+  if(!ok) hitWrong(tid);   // 答对不动错题本（手动移除）
   save();
 }
 function dontKnow(){
   if(!S.quiz) return;
   const tid=S.quiz.ids[S.idx], q=DB.questions[tid];
-  store.dk=store.dk||{}; store.dk[tid]=1; stamp('dk',tid); hitWrong(tid); store.done[tid]='no'; stamp('done',tid); bumpStat(tid,false); save();
+  hitWrong(tid); store.done[tid]='no'; stamp('done',tid); bumpStat(tid,false); dailyMark(tid,false); save();   // 「不会」= 直接进错题本
   const rel=sameKaodian(tid);
   if(!rel.length){ alert('这个考点只有这一道题（题库里没有同类题）'); renderAll(); return; }
   startQuiz(rel,'同考点：'+(q.kaodian||''));
@@ -1880,9 +2033,9 @@ function submit(){
     const q=DB.questions[t], pt=q.type==='多选'?2:1; full+=pt;
     const a=S.answers[t]||[];
     bumpStat(t, a.length && isRight(q,a));
-    if(!a.length){ blank++; store.done[t]='no'; stamp('done',t); hitWrong(t); return; }
-    if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; stamp('done',t); }   // 答对不移出错题本（手动移除）
-    else { noN++; store.done[t]='no'; stamp('done',t); hitWrong(t); }
+    if(!a.length){ blank++; store.done[t]='no'; stamp('done',t); hitWrong(t); dailyMark(t,false); return; }
+    if(isRight(q,a)){ sc+=pt; okN++; store.done[t]='ok'; stamp('done',t); dailyMark(t,true); }   // 答对不移出错题本（手动移除）
+    else { noN++; store.done[t]='no'; stamp('done',t); hitWrong(t); dailyMark(t,false); }
   });
   save(); recordScore({ts:Date.now(),title:S.quiz.title,score:sc,full:full,ok:okN,no:noN,blank:blank,n:ids.length,mode:S.mode}); S.submitted=true; ids.forEach(t=>S.revealed[t]=true); renderAll();
   scheduleSync();   // 交卷后自动同步一次进度
