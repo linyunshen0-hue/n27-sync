@@ -2458,7 +2458,9 @@ function cmtRender(){
 }
 function cmtItem(c, zone, idx, total){
   const me=CMT.me||{};
-  const _uid=cmtUid(); const isMine=!!_uid&&String(c.uid)===_uid;
+  const _uid=cmtUid(); const _meNick=CMT.user&&CMT.user.nick;
+  // 同昵称也算“我的”（兼容早期重复注册产生的历史 uid；后端 del_comment 同规则放行）
+  const isMine=(!!_uid&&String(c.uid)===_uid)||(!!_meNick&&String(c.nick)===String(_meNick));
   const d=new Date(c.ts);
   const ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   const rep=c.reply_to?cmtById(c.reply_to):null;
@@ -2521,9 +2523,9 @@ function cmtDel(cid){
         setCmtState('已删除，联网后同步');
         cmtScheduleFlush();
       }else if(/只能删除自己的评论/.test(m)){
-        alert('这条评论是另一个账号发的（你可能重新注册过），当前登录：'
+        alert('这条评论是另一个昵称的账号发的（当前登录：'
           +((CMT.user&&CMT.user.nick)||'未登录')
-          +'\n\n要删它，请登录当初发评论的那个账号。');
+          +'\n\n同昵称的历史账号现在可以直接删；不同昵称的请登录那个账号。');
       }else alert('删除失败：'+m);
     }
   }, {title:'删除评论', okText:'删除', danger:true});
