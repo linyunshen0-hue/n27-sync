@@ -1369,6 +1369,7 @@ async function loadData(){
 /* ================= 启动 ================= */
 (async function boot(){
   load(); loadCloud();
+  setTimeout(logVisit, 900);   // 访问统计：延后记一条，不抢题库带宽
   try{
     Object.assign(DB, await loadData());
     const vt=document.getElementById('verTag');
@@ -2125,6 +2126,40 @@ async function supaFetch(url, opt, ms){
     throw new Error((e && e.message) || '网络错误');
   }
   finally { clearTimeout(t); }
+}
+
+/* ---- 访问统计（visits）：每次打开页面静默记一条 ----
+   只写不读：anon 只有 insert 权限，RLS 无 select 策略 → 页面/匿名拿不到任何数据，
+   要统计就用 Personal Access Token 跑 SQL（见 交接_接力.md 第三节）。 */
+function visitVid(){
+  try{
+    let v=localStorage.getItem('n27vid');
+    if(!v){ v='v'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); localStorage.setItem('n27vid',v); }
+    return String(v).slice(0,64);
+  }catch(e){ return 'novid'; }
+}
+function logVisit(){
+  if(!SUPA.url || !SUPA.key || SUPA.url.indexOf('xxxx')>=0) return;
+  try{
+    const u=CMT.user||{};
+    const tok=(u.token && _isJwt(u.token)) ? u.token : '';
+    const row={
+      vid: visitVid(),
+      uid: tok ? (_isJwt(tok) ? (jwtPayload(tok).sub||null) : null) : null,
+      page: String(location.hash||'#home').slice(0,120),
+      qs: String(location.search||'').slice(0,120),
+      ref: String(document.referrer||'').slice(0,300)||null,
+      lang: String(navigator.language||'').slice(0,24),
+      w: (window.innerWidth||0)|0,
+      ua: String(navigator.userAgent||'').slice(0,400)
+    };
+    supaFetch(SUPA.url + '/rest/v1/visits', {
+      method:'POST', cache:'no-store',
+      headers:{ apikey:SUPA.key, Authorization:'Bearer '+(tok||SUPA.key),
+                'Content-Type':'application/json', Prefer:'return=minimal' },
+      body: JSON.stringify(row)
+    }, 6000).catch(function(){});
+  }catch(e){}
 }
 
 /* 手动诊断：Console 里跑 cmtDiag() 就能看到当前走哪条通道、哪一步失败 */
