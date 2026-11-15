@@ -562,7 +562,7 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
 
 <header class="topbar">
   <button class="mobmenu" onclick="openDrawer()" aria-label="菜单"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-  <div class="logo"><i>冲</i>冲刺模考 <span style="font-size:10.5px;font-weight:500;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 4px">离线版</span><span id="verTag" style="font-size:10.5px;color:#b8bfca;font-weight:400"></span></div>
+  <div class="logo"><i>冲</i>冲刺模考 <span style="font-size:10.5px;font-weight:500;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 4px">离线版</span><span id="verTag" style="font-size:10.5px;color:#b8bfca;font-weight:400"></span><span id="buildTag" title="页面构建版本（看不清就 Ctrl+Shift+R 硬刷新）" style="font-size:10px;color:#a3aab6;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:2px">v.1116</span></div>
   <button class="mobmenu" id="foldBtn" onclick="setSideFold(!S.sideFold)" title="折叠/展开左侧目录" aria-label="折叠目录"><span id="foldIco">«</span></button>
   <div class="search">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#98a0ad" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
@@ -713,6 +713,8 @@ function redoIds(ids,label,opt){
 }
 
 /* ---- 视图 → 题号列表（错题本/收藏/已斩/未做/笔记全部走这一个） ---- */
+const CUT_T0=Date.now();   // 本次打开页面的时刻：这之后斩的题先留在原位（可反悔），刷新后才消失
+function zhanHide(tid){ const v=(store.zhan&&store.zhan[tid])||0; return v>0 && v<CUT_T0; }
 const VIEW_NAME={all:'全部题',wrong:'错题本',fav:'收藏本',cut:'已斩',todo:'未做',dk:'不会',note:'笔记',batch:'刷题记录'};
 /* ---- 按天记录（今日错 / 近7天错 / 近30天错 用） ---- */
 function dateKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -833,7 +835,7 @@ function viewIds(kind,base){
     ids=src.filter(function(t){ return !!set[t]; });
   }
   else ids=src.slice();
-  if(kind!=='cut') ids=ids.filter(function(t){ return !zhanOn(t); });   // 斩掉的从所有视图消失
+  if(kind!=='cut') ids=ids.filter(function(t){ return !zhanHide(t); });   // 斩掉的从所有视图消失（本次刚斩的先留着可反悔）
   const ord=qOrderMap();
   return ids.sort(function(a,b){ return ((ord[a]===undefined?9e9:ord[a])-(ord[b]===undefined?9e9:ord[b])); });
 }
@@ -1557,6 +1559,17 @@ async function loadData(){
     checkUpdate();
     if(cloud.key&&cloud.token) setTimeout(function(){ cloudSync(true); },1200);
     const h=(location.hash||'').slice(1);
+    const _mq=h.match(/^q-(.+)$/);
+    if(_mq){
+      const _t=decodeURIComponent(_mq[1]);
+      if(DB.questions[_t]){
+        let _bi=-1,_si=-1;
+        (DB.books||[]).forEach(function(b,bi){ (b.sets||[]).forEach(function(st,si){ if(_bi<0&&(st.items||[]).indexOf(_t)>=0){ _bi=bi;_si=si; } }); });
+        if(_bi>=0){ startQuizBySet(_bi,_si); return; }
+        startQuiz([_t],'单题');
+        return;
+      }
+    }
     if(location.search.indexOf('quiz')>=0){
       startQuizBySet(0,0);
       if(location.search.indexOf('note')>=0) setTimeout(()=>{ const b=document.querySelector('.q-title .nbtn'); if(b) b.click(); },200);
@@ -1705,7 +1718,7 @@ function startQuizBySet(bi,si){ if(typeof closeDrawer==='function') closeDrawer(
   s.items.forEach(t=>{ delete S.answers[t]; delete S.revealed[t]; });  // 重刷：清这一套的旧作答
   startQuiz(s.items, b.name.replace('（已更新）','')+' · '+s.set, null, true); }
 function startQuiz(ids,title,atTid,resetHist,fresh){ if(typeof closeDrawer==='function') closeDrawer();
-  ids=(ids||[]).filter(function(t){ return !(store.zhan&&store.zhan[t]); });
+  ids=(ids||[]).filter(function(t){ return !zhanHide(t); });
   if(!ids.length){ if(title&&title.indexOf('错题')>=0) alert('这些题都已被斩掉了（错题本页可「恢复已斩」）'); return; }
   // fresh=true：从错题本/收藏/不会等入口进来 = 重刷，先把这批题的旧作答清掉，否则一进去就是上次的对错和解析
   if(fresh) ids.forEach(function(t){ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; });
@@ -1842,7 +1855,9 @@ function renderMain(){
   wrap.innerHTML=h;
   bindOptEvents(tid);
   if(_lastTid!==tid){ wrap.scrollTop=0; }
+  if(S._lastTid!==tid) S.dtab='ans';   // 只切题时回到解析 tab，点「讲义」不会被重置
   S._lastTid=tid;
+  try{ if(location.hash!=='#q-'+encodeURIComponent(tid)) history.replaceState(null,'','#q-'+encodeURIComponent(tid)); }catch(e){}
   if(!revealed){
     if(_cmt) _cmt.remove();
     CMT.tid=tid;
@@ -2153,6 +2168,11 @@ function setMobDetail(html){
 }
 function clearMobDetail(){ const d=document.getElementById('mobDetail'); if(d) d.innerHTML=''; }
 
+/* 讲义内容：题目 → 讲义。题库里 DB.lecture 支持按 考点id / 考点名 / tid 三种键 */
+function lectureHtml(tid){
+  const q=DB.questions[tid]||{}, L=DB.lecture||{};
+  return L[tid]||L[q.kaodian_id]||L[q.kaodian]||L[q.sec]||'';
+}
 function renderDetail(){
   const el=document.getElementById('dbody'), hd=document.getElementById('dhead');
   const mob=noDetail();
@@ -2169,7 +2189,19 @@ function renderDetail(){
   }
   const right=isRight(q,ans);
   const hdHtml=`<span class="tag ${right?'g':'r'}">${right?'✓ 正确':'✗ 错误'}</span>`;
-  let h=`<div class="cd-dtabs"><span class="on">答案解析</span><span onclick="var b=document.querySelector('.q-title .nbtn');if(b)b.click()">笔记</span><span onclick="cmtGoto()">问答</span></div>`;
+  let h=`<div class="cd-dtabs">`
+    +`<span class="${S.dtab==='lec'?'':'on'}" onclick="S.dtab='ans';renderAll()">答案解析</span>`
+    +`<span class="${S.dtab==='lec'?'on':''}" onclick="S.dtab='lec';renderAll()">讲义</span>`
+    +`<span onclick="cmtGoto()">问答</span></div>`;
+  if(S.dtab==='lec'){
+    const lec=lectureHtml(tid);
+    h+=lec?`<div class="d-sec"><h4>讲义 · ${esc(q.kaodian||'')}</h4><div class="ex-text">${lec}</div></div>`
+          :`<div class="empty-detail" style="padding:20px 14px">这一节还没有接入讲义。<br><span style="font-size:11.5px;color:#c2c8d2">（把讲义 HTML 放进题库的 lecture 字段 / 或单独文件，右栏就会显示）</span></div>`;
+    el.innerHTML=h;
+    if(mob) setMobDetail(h);
+    hd.textContent='';
+    return;
+  }
   h+=`<div class="d-sec"><div class="ans-row">
       <div class="ans-box ok"><div class="lbl">正确答案</div><div class="val">${esc(q.answer)}</div></div>
       <div class="ans-box ${right?'ok':'no'}"><div class="lbl">你的答案</div><div class="val">${ans.join('')||'—'}</div></div></div></div>`;
@@ -2230,7 +2262,8 @@ function openSheet(){
   if(typeof closeDrawer==='function') closeDrawer();   // 抽屉（z-index 60）会盖住答题卡，先收抽屉
   if(!S.quiz) return;
   const ids=S.quiz.ids;
-  document.getElementById('sheettitle').textContent=`答题卡 ${ids.length} 题`;
+  const _zn=Object.keys(store.zhan||{}).length;
+  document.getElementById('sheettitle').textContent=`答题卡 ${ids.length} 题`+(_zn?` · 已斩 ${_zn}`:'');
   let h='<div class="grid">';
   ids.forEach((t,j)=>{
     const a=S.answers[t]||[]; let cls='';
