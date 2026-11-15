@@ -90,6 +90,19 @@ button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
 .opt .o-nbtn{flex:0 0 26px;height:26px;border-radius:7px;font-size:13px;display:flex;align-items:center;justify-content:center;opacity:.42;transition:.13s;border:1px solid transparent;cursor:pointer}
 .opt .o-nbtn:hover{opacity:1;background:var(--note-soft);border-color:#ddd0ff}
 .opt .o-nbtn.has{opacity:1;background:var(--note-soft);color:var(--note);border-color:#ddd0ff}
+/* 题干划线笔记 */
+.q-title .hl{background:#fff3b8;border-bottom:2px solid #f2c744;border-radius:3px;padding:1px 1px}
+.q-title .hl:hover{background:#ffe98a}
+.q-title .nb{font-style:normal;display:inline-block;margin-left:4px;font-size:11.5px;font-weight:600;color:#7a5af8;
+  background:#f3f0ff;border:1px solid #ded5ff;border-radius:6px;padding:1px 6px;vertical-align:1px;cursor:pointer}
+.hlbar{position:fixed;z-index:999;display:none;gap:4px;background:#23272f;border-radius:9px;padding:4px;
+  box-shadow:0 6px 20px rgba(0,0,0,.28)}
+.hlbar.on{display:flex}
+.hlbar button{border:0;background:transparent;color:#fff;font:600 12.5px/1 system-ui;padding:7px 9px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.hlbar button:hover{background:rgba(255,255,255,.16)}
+.opt.excl{opacity:.5;background:#f7f8fa;border-style:dashed}
+.opt.excl .v{text-decoration:line-through;color:#8b93a1}
+.opt.excl .k{border-color:#d8dde5;color:#b3bac5}
 .opt.sel{border-color:var(--pri);background:var(--pri-soft)}
 .opt.sel .k{background:var(--pri);border-color:var(--pri);color:#fff}
 .opt.ok{border-color:var(--ok);background:var(--ok-soft)}
@@ -591,6 +604,11 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
   </aside>
 </div>
 
+<div class="hlbar" id="hlbar">
+  <button onclick="hlAdd('')">🖍 划线</button>
+  <button onclick="hlAddNote()">✎ 笔记</button>
+  <button onclick="hlDel()">✕ 清除</button>
+</div>
 <div class="npop" id="npop">
   <div class="nh"><span id="npTitle">📝 笔记</span><span onclick="closeNote()">关闭 ×</span></div>
   <textarea id="npText" placeholder="写点什么…（比如：为什么错 / 记忆点 / 和哪题混了）"></textarea>
@@ -616,7 +634,7 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
 /* ================= 数据 ================= */
 const DB = { meta:{}, books:[], questions:{}, mantras:{}, tree:{} };
 const LS_STORE='cd27_desk_v1', LS_NOTE='cd27_notes_v1';
-let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{}, zhan:{}, daily:{}, batches:[] };   // dk=不会；mt/del=同步时间戳；zhan=已斩（不再出现）
+let store = { done:{}, wrong:{}, fav:{}, dk:{}, mt:{}, del:{}, zhan:{}, daily:{}, batches:[], excl:{} };   // dk=不会；mt/del=同步时间戳；zhan=已斩（不再出现）
 let notes = {};
 /* ================= 成绩记录 / 错题·收藏库 ================= */
 const LS_SCORE='cs3_scores_v1';
@@ -796,6 +814,7 @@ function renderList(head,wrap,tools){
 }
 
 function hasNoteAny(tid){
+  if(HL&&HL[tid]&&HL[tid].length) return true;
   const ks=Object.keys(notes||{});
   for(let i=0;i<ks.length;i++){ if(ks[i]===tid||ks[i].indexOf(tid+'|')===0) return true; }
   return false;
@@ -1270,25 +1289,12 @@ function openSetDetail(bi,si){
 function startSetQuiz(){ const v=S.setView; if(!v) return; S.setView=null; startQuizBySet(v.bi,v.si); }
 /* 重做整套卷：只清作答/判定（错题本、收藏、斩题一个不动） */
 function redoSet(bi,si){
-<<<<<<< HEAD
-  const b=DB.books[bi]||{}, s=(b.sets||[])[si]||{items:[]};
-  const ids=(s.items||[]).filter(function(t){ return !zhanOn(t); });
-  if(!ids.length) return;
-  const n=ids.filter(function(t){ return store.done[t]; }).length;
-  uiConfirm('重做「'+s.set+'」（'+ids.length+' 题）？\n\n只清空作答和判定（已作答 '+n+' 条），错题本/收藏/斩题都不动。', function(){
-    ids.forEach(function(t){ delete S.answers[t]; delete S.revealed[t]; if(S.judged) delete S.judged[t]; if(store.done){ delete store.done[t]; untouch('done',t); } });
-    S.submitted=false; if(S.quiz){ S.idx=0; S._lastTid=null; }
-    save(); renderAll();
-  }, {title:'重做本卷', okText:'重做'});
-}
-=======
   const b=DB.books[bi]||{}, st=(b.sets||[])[si]||{items:[]};
   const ids=(st.items||[]).filter(function(t){ return !zhanOn(t); });
   redoIds(ids, st.set, {back:true});
 }
 /* 列表页的「↺ 重做」：用当前列表（S.listIds） */
 function redoList(){ redoIds(S.listIds||[], VIEW_NAME[S.rectab]); }
->>>>>>> 499b72b (refactor(S1/S2): 列表/重做统一（viewIds+listRow+redoIds）；顶栏视图tab（全部/错题/收藏/已斩/未做/笔记/今日/7天/30天）；刷题记录批次；不会并入错题本)
 function renderSetView(head,wrap,tools){
   tools.style.display='none';
   const v=S.setView, b=DB.books[v.bi]||{}, s=(b.sets||[])[v.si]||{items:[],set:''};
@@ -1525,7 +1531,7 @@ async function loadData(){
 
 /* ================= 启动 ================= */
 (async function boot(){
-  load(); loadCloud();
+  load(); loadCloud(); try{ loadHL(); }catch(e){}
   setTimeout(logVisit, 900);   // 访问统计：延后记一条，不抢题库带宽
   try{
     Object.assign(DB, await loadData());
@@ -1535,6 +1541,17 @@ async function loadData(){
     Object.keys(DB.tree).forEach(k=>{const p=DB.tree[k][1]; if(!p||!DB.tree[p]) S.openTree.add(k);});
     loadFold(); applyFold();
     renderAll(); bindKeys(); bindSwipe();
+    const _qw=document.getElementById('qwrap');
+    _qw.addEventListener('mouseup', onStemSelect);
+    _qw.addEventListener('touchend', function(e){ onStemSelect(e); });
+    document.addEventListener('mousedown', function(e){
+      if(e.target.closest&&(e.target.closest('.hl')||e.target.closest('#hlbar')||e.target.closest('#npop'))) return;
+      hideHlBar();
+    });
+    document.addEventListener('touchstart', function(e){
+      if(e.target.closest&&(e.target.closest('.hl')||e.target.closest('#hlbar')||e.target.closest('#npop'))) return;
+      hideHlBar();
+    },{passive:true});
     const _sp=new URLSearchParams(location.search);
     if(_sp.get('synctest')) SYNC.baseUrl=_sp.get('synctest');
     checkUpdate();
@@ -1775,9 +1792,7 @@ function renderMain(){
       <button class="qmi" onclick="redoOne('${tid}')" title="只重做本题：清掉本题作答，错题本/收藏/斩都不动">↺ 重做本题</button>
     </div>
     ${q.type==='多选'&&S.mode==='practice'&&!revealed?'<div class="multi-tip">多选题 · 选项全部选好后再点「确认选项」</div>':''}
-    <div class="q-title">${esc(q.title)}
-      ${(isMob()||!revealed)?'':`<span class="nbtn ${stemNote?'has':''}" title="题干笔记" onclick="editNote('${tid}','stem',this)">📝</span>`}
-    </div>
+    <div class="q-title"><span class="qtx">${renderStemHtml(tid,q.title)}</span></div>
     ${q.kaodian?`<div class="cd-kd" onclick="killKaodian('${q.kaodian_id}')" title="点这里只刷这个考点">🔖 ${esc(q.kaodian)}<span class="ar">›</span></div>`:`<div class="cd-kd static">🔖 未标注考点</div>`}
     ${stemNote?`<div style="background:var(--note-soft);border-left:3px solid var(--note);border-radius:7px;padding:8px 11px;margin:-6px 0 14px;font-size:13px;line-height:1.65;color:#4b3a7a;white-space:pre-wrap">${esc(stemNote)}</div>`:''}
     <div class="opts">`;
@@ -1786,7 +1801,7 @@ function renderMain(){
     if(revealed){ if(q.answer.includes(k)) cls='ok'; else if(ans.includes(k)) cls='no'; }
     else if(ans.includes(k)) cls='sel';
     const nk=tid+'|'+k, has=revealed?noteText(nk):'';
-    h+=`<div class="opt ${cls}" data-k="${k}">
+    h+=`<div class="opt ${cls} ${isExclOpt(tid,k)?'excl':''}" data-k="${k}">
       <span class="k" onclick="pick('${k}')">${k}</span>
       <span class="v" onclick="pick('${k}')" style="cursor:pointer">${esc((q.xuanxiang[k]||'').replace(new RegExp('^'+k+'[.、．]\\s*'),''))}</span>
       ${revealed?`<span class="o-nbtn ${has?'has':''}" title="选项笔记" onclick="event.stopPropagation();editNote('${tid}','opt:${k}',this)">📝</span>`:''}
@@ -1796,11 +1811,13 @@ function renderMain(){
   h+='</div>';
   if(S.mode==='practice' && !S.submitted){
     if(!revealed){
-      const _rdy=ans.length>0;
-      h+=`<div class="q-act"><button class="cd-sub${_rdy?' on':''}" ${_rdy?'':'disabled'} onclick="submitOne()">确认选项<span class="kbd-hint">Enter</span></button>`
-        +`<div class="q-act-row">`
-        +(q.type==='多选'?'<span class="q-act-tip">多选：全部选项选好再提交</span>':'')
-        +(_rdy?'':'<span class="q-act-tip">先选一个选项</span>')+`</div></div>`;
+      if(q.type==='多选'){
+        const _rdy=ans.length>0;
+        h+=`<div class="q-act"><button class="cd-sub${_rdy?' on':''}" ${_rdy?'':'disabled'} onclick="submitOne()">提交答案<span class="kbd-hint">Enter</span></button>`
+          +`<div class="q-act-row">`+(_rdy?'<span class="q-act-tip">选完整后提交</span>':'<span class="q-act-tip">先勾选项</span>')+`</div></div>`;
+      }else{
+        h+=`<div class="q-act-row" style="padding:2px 2px 0"><span class="q-act-tip">点选项即判定 · 长按选项 = 排除（划线不看）</span></div>`;
+      }
     }else{
       const _ok=isRight(q,ans), _jd=!!(S.judged&&S.judged[tid]);
       const _ca=Array.isArray(q.answer)?q.answer.join(''):String(q.answer==null?'':q.answer);
@@ -1823,6 +1840,7 @@ function renderMain(){
   const _cmt=document.getElementById('cmtBox');
   if(_cmt && _cmt.dataset.tid!==tid){ _cmt.remove(); }
   wrap.innerHTML=h;
+  bindOptEvents(tid);
   if(_lastTid!==tid){ wrap.scrollTop=0; }
   S._lastTid=tid;
   if(!revealed){
@@ -1851,17 +1869,51 @@ function renderMain(){
     <button class="btn pri" onclick="submit()">交卷</button></div>`;
 }
 
+/* ---- 选项「排除」标记（长按/右键）：和作答无关，只是划掉不看的选项 ---- */
+function exclList(tid){ return (store.excl&&store.excl[tid])||[]; }
+function isExclOpt(tid,k){ return exclList(tid).indexOf(k)>=0; }
+function toggleExclOpt(tid,k){
+  store.excl=store.excl||{};
+  let a=exclList(tid).slice(), i=a.indexOf(k);
+  if(i>=0) a.splice(i,1); else a.push(k);
+  if(a.length) store.excl[tid]=a; else delete store.excl[tid];
+  // 排除掉已选的选项
+  const cur=(S.answers[tid]||[]).filter(function(x){ return a.indexOf(x)<0; });
+  if(cur.length) S.answers[tid]=cur; else delete S.answers[tid];
+  save(); renderAll();
+}
+/* 长按 550ms / 右键 = 排除；区分题干（选字）和选项（排除） */
+let _lpt=null,_lpEl=null,_lpFired=0;
+function bindOptEvents(tid){
+  const box=document.querySelector('#qwrap .opts'); if(!box) return;
+  box.querySelectorAll('.opt').forEach(function(el){
+    const start=function(){ clearTimeout(_lpt); _lpEl=el;
+      _lpt=setTimeout(function(){ _lpFired=Date.now(); toggleExclOpt(tid,+el.dataset.k);
+        try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} },550); };
+    const stop=function(){ clearTimeout(_lpt); };
+    el.addEventListener('touchstart',start,{passive:true});
+    el.addEventListener('mousedown',start);
+    ['touchend','touchmove','touchcancel','mouseup','mouseleave'].forEach(function(ev){ el.addEventListener(ev,stop); });
+    el.addEventListener('contextmenu',function(e){ e.preventDefault(); if(Date.now()-_lpFired<400) return; toggleExclOpt(tid,+el.dataset.k); });
+  });
+}
 function pick(k){
   if(S._swiped && Date.now()-S._swiped < 300) return;
+  if(Date.now()-_lpFired < 400) return;        // 长按触发的排除，不要顺带选中
   if(!S.quiz || S.submitted) return;
   const tid=S.quiz.ids[S.idx],q=DB.questions[tid];
-  let arr=S.answers[tid]||[];
-  if(q.type==='多选'){ arr=arr.includes(k)?arr.filter(x=>x!==k):arr.concat(k); }
-  else arr=[k];
-  S.answers[tid]=arr.sort();
-  S.revealed[tid]=false;      // 改选后回到“未判定”，要重新提交才判
-  if(S.judged) delete S.judged[tid];
-  renderAll();
+  if(isExclOpt(tid,k)){ toggleExclOpt(tid,k); return; }   // 点已排除的选项 = 取消排除
+  if(q.type==='多选'){
+    let arr=S.answers[tid]||[];
+    arr=arr.includes(k)?arr.filter(function(x){return x!==k;}):arr.concat(k);
+    S.answers[tid]=arr.sort();
+    S.revealed[tid]=false; if(S.judged) delete S.judged[tid];
+    renderAll(); return;
+  }
+  // 单选：点一下就直接判定（照参考页），考试模式只记答案
+  S.answers[tid]=[k];
+  if(S.mode==='exam'){ S.revealed[tid]=false; renderAll(); return; }
+  submitOne();
 }
 /* 提交本题：练习模式判分+写错题本；考试模式不判，只记答案 */
 function submitOne(){
@@ -1927,6 +1979,128 @@ function next(){ if(S.quiz&&S.idx<S.quiz.ids.length-1){ const g=snapCard(); S.id
 function toggleFav(tid){ if(store.fav[tid]){ delete store.fav[tid]; untouch('fav',tid); } else { store.fav[tid]=1; stamp('fav',tid); } save(); renderAll(); }
 
 /* ================= 笔记 ================= */
+/* ================= 题干划线笔记（照参考页） =================
+   选中题干文字 → 浮出「🖍划线 / ✎笔记 / ✕清除」→ 标签直接贴在划线那句后面。
+   存：cd27_hl_v1 = { tid: [{s,e,note}] }，s/e 是题干纯文本的字符偏移。 */
+const LS_HL='cd27_hl_v1';
+let HL={};
+function loadHL(){ try{HL=JSON.parse(localStorage.getItem(LS_HL)||'{}')||{}}catch(e){HL={}} }
+function saveHL(){ try{localStorage.setItem(LS_HL,JSON.stringify(HL))}catch(e){} }
+function hlList(tid){ return (HL[tid]||[]).slice().sort(function(a,b){return a.s-b.s}); }
+function fragLen(node){
+  let n=0;
+  const w=document.createTreeWalker(node,NodeFilter.SHOW_TEXT,null); let t;
+  while((t=w.nextNode())){
+    const p=t.parentNode;
+    if(p&&p.closest&&p.closest('.nb')) continue;      // 跳过笔记标签本体
+    n+=t.nodeValue.length;
+  }
+  return n;
+}
+function renderStemHtml(tid,text){
+  text=String(text||'');
+  const mk=hlList(tid);
+  if(!mk.length) return esc(text);
+  let out='', pos=0;
+  mk.forEach(function(m){
+    if(m.s<pos||m.e<=m.s||m.s>=text.length) return;
+    out+=esc(text.slice(pos,m.s));
+    out+='<span class="hl" data-s="'+m.s+'" title="划线（点一下编辑笔记，双击删除）">'+esc(text.slice(m.s,m.e))
+        +(m.note?'<i class="nb">'+esc(String(m.note).slice(0,24))+'</i>':'')+'</span>';
+    pos=m.e;
+  });
+  return out+esc(text.slice(pos));
+}
+function onStemSelect(e){
+  const qtx=document.querySelector('#qwrap .qtx'); if(!qtx) return;
+  setTimeout(function(){
+    const sel=window.getSelection();
+    if(!sel||sel.isCollapsed){
+      const t=e&&e.target;
+      if(t&&t.closest&&t.closest('.hl')) editHlNote(t.closest('.hl'));
+      return;
+    }
+    const r=sel.getRangeAt(0);
+    if(!qtx.contains(r.startContainer)||!qtx.contains(r.endContainer)) return;
+    const txt=String(r.toString()||'').trim(); if(!txt) return;
+    const pre=r.cloneRange(); pre.selectNodeContents(qtx); pre.setEnd(r.startContainer,r.startOffset);
+    const s=fragLen(pre.cloneContents());
+    S.hlSel={s:s,e:s+String(r.toString()).length,text:r.toString()};
+    showHlBar(e, r);
+  },10);
+}
+function showHlBar(e,r){
+  const bar=document.getElementById('hlbar'); if(!bar) return;
+  let rect=null;
+  try{ rect=r.getBoundingClientRect(); }catch(x){}
+  if(!rect&&e){ rect={left:e.clientX,top:e.clientY,width:0,height:0}; }
+  if(!rect) return;
+  bar.classList.add('on');
+  const w=196;
+  let left=Math.max(8,Math.min(window.innerWidth-w-8, rect.left+rect.width/2-w/2));
+  let top=rect.top-46; if(top<56) top=rect.bottom+10;
+  bar.style.left=left+'px'; bar.style.top=top+'px';
+}
+function hideHlBar(){ const b=document.getElementById('hlbar'); if(b) b.classList.remove('on'); }
+function hlAdd(note){
+  const tid=S.quiz&&S.quiz.ids[S.idx], sel=S.hlSel;
+  if(!tid||!sel) return;
+  HL[tid]=HL[tid]||[];
+  // 去掉被新划线覆盖的旧标记
+  HL[tid]=HL[tid].filter(function(m){ return m.e<=sel.s||m.s>=sel.e; });
+  HL[tid].push({s:sel.s,e:sel.e,note:note||'',ts:Date.now()});
+  saveHL(); hideHlBar();
+  try{ window.getSelection().removeAllRanges(); }catch(x){}
+  renderAll();
+}
+function hlAddNote(){
+  const s0=S.hlSel?S.hlSel.s:0;
+  hlAdd('');
+  setTimeout(function(){
+    const el=document.querySelector('#qwrap .hl[data-s="'+s0+'"]');
+    if(el) editHlNote(el);
+  },40);
+}
+function hlDel(){
+  const tid=S.quiz&&S.quiz.ids[S.idx], sel=S.hlSel;
+  if(!tid||!sel) return;
+  HL[tid]=(HL[tid]||[]).filter(function(m){ return m.e<=sel.s||m.s>=sel.e; });
+  if(!HL[tid].length) delete HL[tid];
+  saveHL(); hideHlBar();
+  try{ window.getSelection().removeAllRanges(); }catch(x){}
+  renderAll();
+}
+function editHlNote(el){
+  const tid=S.quiz&&S.quiz.ids[S.idx]; if(!tid||!el) return;
+  const m=(HL[tid]||[]).filter(function(x){ return x.s===+el.dataset.s; })[0];
+  if(!m) return;
+  S.editHl={tid:tid,s:m.s};
+  const pop=document.getElementById('npop');
+  document.getElementById('npTitle').textContent='🖍 划线笔记';
+  document.getElementById('npText').value=m.note||'';
+  pop.classList.add('on');
+  const r=el.getBoundingClientRect();
+  const w=340,h=210;
+  pop.style.left=Math.max(12,Math.min(window.innerWidth-w-16,r.left-40))+'px';
+  pop.style.top=(r.bottom+8+h>window.innerHeight-10?Math.max(10,r.top-h-8):r.bottom+8)+'px';
+  setTimeout(function(){ document.getElementById('npText').focus(); },50);
+}
+function hlSaveNote(){
+  const E=S.editHl; if(!E) return;
+  const t=document.getElementById('npText').value.trim();
+  const arr=HL[E.tid]||[];
+  const i=arr.findIndex(function(m){ return m.s===E.s; });
+  if(i>=0){ if(t) arr[i].note=t; else arr[i].note=''; }
+  saveHL(); closeNote(); renderAll();
+}
+function hlDelNote(){
+  const E=S.editHl; if(!E) return;
+  const arr=HL[E.tid]||[];
+  HL[E.tid]=arr.filter(function(m){ return m.s!==E.s; });
+  if(!HL[E.tid].length) delete HL[E.tid];
+  saveHL(); closeNote(); renderAll();
+}
+
 function editNote(tid, kind, anchor){
   const key = kind==='stem' ? tid : tid+'|'+kind.split(':')[1];
   S.editNote = key;
@@ -1944,13 +2118,14 @@ function editNote(tid, kind, anchor){
   setTimeout(()=>document.getElementById('npText').focus(),50);
 }
 function saveNote(){
+  if(S.editHl){ hlSaveNote(); return; }
   const k=S.editNote, t=document.getElementById('npText').value.trim();
   if(!k) return;
   if(t) notes[k]={text:t, ts:Date.now()}; else delete notes[k];
   saveNotes(); closeNote(); renderAll();
 }
-function delNote(){ if(S.editNote){ delete notes[S.editNote]; saveNotes(); closeNote(); renderAll(); } }
-function closeNote(){ S.editNote=null; document.getElementById('npop').classList.remove('on'); }
+function delNote(){ if(S.editHl){ hlDelNote(); return; } if(S.editNote){ delete notes[S.editNote]; saveNotes(); closeNote(); renderAll(); } }
+function closeNote(){ S.editNote=null; S.editHl=null; document.getElementById('npop').classList.remove('on'); }
 function exportNotes(){
   const keys=Object.keys(notes).filter(k=>noteText(k).trim());
   if(!keys.length) return alert('还没有笔记');
