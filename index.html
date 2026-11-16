@@ -140,6 +140,17 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 .detail{flex:0 0 380px;background:var(--card);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .detail-head{flex:0 0 auto;padding:11px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700}
 .detail-body{flex:1;overflow-y:auto;padding:14px 16px 40px}
+/* 右栏（解析栏）可收起：detail『折叠按钮 → body.dfold → 右边悬浮把手可展开 */
+.dfoldbtn{margin-left:8px;cursor:pointer;color:#9aa3b2;font-size:15px;line-height:1;padding:1px 5px;border-radius:5px}
+.dfoldbtn:hover{background:#f1f3f6;color:#3c4453}
+body.dfold .detail{display:none}
+.dfoldtab{display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:48;
+  background:var(--card);border:1px solid var(--line);border-right:0;border-radius:8px 0 0 8px;
+  padding:10px 5px;font-size:11.5px;color:#5b6474;cursor:pointer;writing-mode:vertical-rl;
+  letter-spacing:1.5px;box-shadow:-2px 0 8px rgba(16,24,40,.07);user-select:none}
+.dfoldtab:hover{color:#12a86e;border-color:#bfe6d5}
+body.dfold .dfoldtab{display:block}
+@media (max-width:1040px){.dfoldtab{display:none!important}}
 .d-sec{margin-bottom:16px}
 .d-sec h4{font-size:11px;font-weight:700;color:#a3aab6;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:6px}
 .ans-row{display:flex;gap:8px}
@@ -252,6 +263,9 @@ kbd{font-family:inherit;font-size:10.5px;background:#f0f2f5;border:1px solid var
 .sheet-hd h3{font-size:15px;font-weight:700}
 .sheet-hd .x{margin-left:auto;font-size:19px;color:var(--muted);cursor:pointer;line-height:1}
 .sheet-bd{flex:1;overflow-y:auto;padding:14px 18px 28px}
+.sheet-grp{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:#5b6474;margin:2px 0 8px}
+.sheet-grp em{font-style:normal;font-weight:400;font-size:11.5px;color:var(--muted)}
+.sheet-grp+.grid{margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-bottom:14px}
 .grid b{height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;background:var(--bg);color:#6b7280;cursor:pointer;border:1.5px solid transparent;position:relative}
 .grid b:hover{border-color:#c9d3e6}
@@ -599,9 +613,10 @@ body.quiz .main-head{padding-top:6px;padding-bottom:6px}
   </main>
 
   <aside class="detail">
-    <div class="detail-head">解析 <span id="dhead" style="margin-left:auto"></span></div>
+    <div class="detail-head">解析 <span id="dhead" style="margin-left:auto"></span><span class="dfoldbtn" title="收起解析栏" onclick="setDetailFold(true)">›</span></div>
     <div class="detail-body" id="dbody"></div>
   </aside>
+  <div class="dfoldtab" title="展开解析栏（双视图）" onclick="setDetailFold(false)">解析栏</div>
 </div>
 
 <div class="hlbar" id="hlbar">
@@ -1101,6 +1116,24 @@ function mobTab(n){
 }
 function isMob(){ return window.innerWidth<=700; }
 
+/* ===== 右栏（解析/双视图）可收起，偏好存 localStorage ===== */
+const LS_DFOLD='cd27_dfold_v1';
+function loadDFold(){
+  try{ S.dfold = localStorage.getItem(LS_DFOLD)==='1'; }
+  catch(e){ S.dfold=false; }
+}
+function applyDFold(){
+  document.body.classList.toggle('dfold', !!S.dfold);
+  const b=document.querySelector('.dfoldbtn'); if(b) b.title = S.dfold?'':'收起解析栏';
+}
+function setDetailFold(v){
+  S.dfold=!!v;
+  try{ localStorage.setItem(LS_DFOLD, v?'1':'0'); }catch(e){}
+  applyDFold();
+  if(!v && typeof renderDetail==='function') renderDetail();   // 展开时补染一次（收起期间解析会停跟）
+  if(typeof renderMain==='function' && !S.quiz) renderMain();
+}
+
 /* ===== 左侧目录折叠：用户自由开关，选好卷子后自动折一次 ===== */
 const LS_FOLD='cd27_fold_v1';
 function loadFold(){
@@ -1542,6 +1575,7 @@ async function loadData(){
     buildIndex();
     Object.keys(DB.tree).forEach(k=>{const p=DB.tree[k][1]; if(!p||!DB.tree[p]) S.openTree.add(k);});
     loadFold(); applyFold();
+    loadDFold(); applyDFold();
     renderAll(); bindKeys(); bindSwipe();
     const _qw=document.getElementById('qwrap');
     _qw.addEventListener('mouseup', onStemSelect);
@@ -2270,16 +2304,26 @@ function openSheet(){
   const ids=S.quiz.ids;
   const _zn=Object.keys(store.zhan||{}).length;
   document.getElementById('sheettitle').textContent=`答题卡 ${ids.length} 题`+(_zn?` · 已斩 ${_zn}`:'');
-  let h='<div class="grid">';
-  ids.forEach((t,j)=>{
-    const a=S.answers[t]||[]; let cls='';
-    if(S.submitted||S.revealed[t]) cls=isRight(DB.questions[t],a)?'ok':'no';
-    else if(a.length) cls='done';
-    if(j===S.idx) cls+=' cur';
-    const hasN=noteText(t)||Object.keys(notes).some(k=>k.startsWith(t+'|'));
-    h+=`<b class="${cls}" onclick="jump(${j})">${j+1}${hasN?'<span class="d"></span>':''}</b>`;
+  let h='';
+  // 按题型分组（题库只有「单选」/「多选」）；只有一种题型时不加分段标题，保持原样
+  const _types={};
+  ids.forEach(t=>{ const ty=(DB.questions[t]||{}).type||'其他'; _types[ty]=(_types[ty]||0)+1; });
+  const _kinds=Object.keys(_types);
+  _kinds.forEach(ty=>{
+    if(_kinds.length>1) h+=`<div class="sheet-grp">${ty}<em>${_types[ty]} 题</em></div>`;
+    h+='<div class="grid">';
+    ids.forEach((t,j)=>{
+      if(((DB.questions[t]||{}).type||'其他')!==ty) return;
+      const a=S.answers[t]||[]; let cls='';
+      if(S.submitted||S.revealed[t]) cls=isRight(DB.questions[t],a)?'ok':'no';
+      else if(a.length) cls='done';
+      if(j===S.idx) cls+=' cur';
+      const hasN=noteText(t)||Object.keys(notes).some(k=>k.startsWith(t+'|'));
+      h+=`<b class="${cls}" onclick="jump(${j})">${j+1}${hasN?'<span class="d"></span>':''}</b>`;
+    });
+    h+='</div>';
   });
-  h+=`</div><div class="legend"><span class="l1">已答</span><span class="l2">正确</span><span class="l3">错误</span><span class="l4">未答</span><span class="l5">有笔记</span></div>`;
+  h+='<div class="legend"><span class="l1">已答</span><span class="l2">正确</span><span class="l3">错误</span><span class="l4">未答</span><span class="l5">有笔记</span></div>';
   h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:9px;flex-wrap:wrap">
         <button class="btn line" onclick="closeSheet();resetQuiz()">重做本卷</button>
         <span style="font-size:11.8px;color:var(--muted)">清空本卷作答与判定（错题本、成绩记录保留）</span></div>`;
