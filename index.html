@@ -1856,6 +1856,7 @@ function renderMain(){
   bindOptEvents(tid);
   if(_lastTid!==tid){ wrap.scrollTop=0; }
   if(S._lastTid!==tid) S.dtab='ans';   // 只切题时回到解析 tab，点「讲义」不会被重置
+  if(S.dtab==='lec' && !_hasLecture()) S.dtab='ans';   // 题库没讲义数据时别停在空白讲义页
   S._lastTid=tid;
   try{ if(location.hash!=='#q-'+encodeURIComponent(tid)) history.replaceState(null,'','#q-'+encodeURIComponent(tid)); }catch(e){}
   if(!revealed){
@@ -2173,6 +2174,11 @@ function lectureHtml(tid){
   const q=DB.questions[tid]||{}, L=DB.lecture||{};
   return L[tid]||L[q.kaodian_id]||L[q.kaodian]||L[q.sec]||'';
 }
+/* 题库没接讲义时（DB.lecture 不存在/为空），不渲染「讲义」tab，免得用户点进去只看空提示 */
+function _hasLecture(){
+  const L=DB.lecture;
+  return !!(L && typeof L==='object' && Object.keys(L).length);
+}
 function renderDetail(){
   const el=document.getElementById('dbody'), hd=document.getElementById('dhead');
   const mob=noDetail();
@@ -2191,7 +2197,7 @@ function renderDetail(){
   const hdHtml=`<span class="tag ${right?'g':'r'}">${right?'✓ 正确':'✗ 错误'}</span>`;
   let h=`<div class="cd-dtabs">`
     +`<span class="${S.dtab==='lec'?'':'on'}" onclick="S.dtab='ans';renderAll()">答案解析</span>`
-    +`<span class="${S.dtab==='lec'?'on':''}" onclick="S.dtab='lec';renderAll()">讲义</span>`
+    +(_hasLecture()?`<span class="${S.dtab==='lec'?'on':''}" onclick="S.dtab='lec';renderAll()">讲义</span>`:'')
     +`<span onclick="cmtGoto()">问答</span></div>`;
   if(S.dtab==='lec'){
     const lec=lectureHtml(tid);
